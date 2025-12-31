@@ -1,36 +1,49 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createLocalPaperService, isLocalStorageMode } from '@/lib/db/local';
 import { fetchArxivPaperById } from '@/lib/arxiv/fetcher';
+import { getPaperFullTextByDepth } from '@/lib/paper/full-text-provider';
+import { getAnalysisDepth, getPaperAnalysisConfig, type AnalysisDepth } from '@/lib/config/paper-analysis';
 
 /**
- * POST /api/deep-analyze-pending
- * Deep analyze papers that haven't been analyzed yet
+ * POST /api/reanalyze-pending
+ * Re-analyze papers that haven't been analyzed yet
  *
  * This endpoint:
  * 1. Scans local storage for papers with is_deep_analyzed=false
- * 2. Re-fetches complete data from ArXiv (by arxiv_id)
- * 3. Performs deep analysis with the full paper data
+ * 2. For each paper:
+ *    - Re-fetches complete data from ArXiv (by arxiv_id)
+ *    - Gets full text based on depth
+ *    - Performs deep analysis
+ * 3. Updates papers with analysis results
  *
  * Uses POST because this operation modifies server-side data.
  *
  * Query Parameters:
- * - maxPapers: number (optional) - limit how many papers to process (default: process ALL)
+ * - depth: 'basic' | 'standard' | 'full' (optional, default: from ANALYSIS_DEPTH env var)
+ *   - Priority: API parameter > environment variable > 'basic'
+ * - maxPapers: number (optional) - limit how many papers to process
  * - maxTokens: number (default: 12000) - override max tokens for LLM response
  *
  * Example:
- * curl -X POST "http://localhost:3000/api/deep-analyze-pending?maxTokens=30000"
- * curl -X POST "http://localhost:3000/api/deep-analyze-pending?maxPapers=20&maxTokens=16000"
+ * curl -X POST "http://localhost:3000/api/reanalyze-pending?depth=full&maxPapers=5"
+ * curl -X POST "http://localhost:3000/api/reanalyze-pending?depth=standard&maxTokens=30000"
  */
 export async function POST(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
+    const depthParam = searchParams.get('depth');
+    const typeParam = searchParams.get('type');  // For backward compatibility
     const maxPapersParam = searchParams.get('maxPapers');
-    const maxPapers = maxPapersParam ? Math.min(parseInt(maxPapersParam), 100) : null; // No limit by default
+    const maxPapers = maxPapersParam ? Math.min(parseInt(maxPapersParam), 100) : null;
     const maxTokensParam = searchParams.get('maxTokens');
     const userMaxTokens = maxTokensParam ? parseInt(maxTokensParam) : null;
 
-    console.log('=== Deep Analyze Pending Started ===');
-    console.log(`Max Papers: ${maxPapers || 'ALL'}, Max Tokens: ${userMaxTokens || 'default'}`);
+    // Determine analysis depth (API parameter has highest priority)
+    const analysisDepth: AnalysisDepth = getAnalysisDepth(depthParam || typeParam);
+    const config = getPaperAnalysisConfig();
+
+    console.log('=== Reanalyze Pending Started ===');
+    console.log(`Depth: ${analysisDepth}, Max Papers: ${maxPapers || 'ALL'}, Max Tokens: ${userMaxTokens || 'default'}`);
     const startTime = Date.now();
 
     const useLocal = isLocalStorageMode();
@@ -90,6 +103,19 @@ export async function POST(request: NextRequest) {
 
         console.log(`    Summary length: ${summary.length}, Categories: ${categories.length}`);
 
+        // Step 2: Get full text based on analysis depth
+        const fullTextResult = await getPaperFullTextByDepth(paper.arxiv_id, analysisDepth);
+
+        if (fullTextResult.content) {
+          console.log(`    Full text: ${fullTextResult.source} (${fullTextResult.length} chars, depth=${analysisDepth})`);
+        } else {
+          console.log(`    Using abstract (depth=basic or download failed)`);
+          if (fullTextResult.error) {
+            console.log(`    Reason: ${fullTextResult.error}`);
+          }
+        }
+
+        // Step 3: Call analyze API
         const analysisResponse = await fetch(`${baseUrl}/api/analyze`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -97,8 +123,10 @@ export async function POST(request: NextRequest) {
             title: paper.title,
             summary: summary,
             categories: categories,
-            skipDeepAnalysis: false, // We want deep analysis
+            fullText: fullTextResult.content,
+            outputLevel: analysisDepth === 'basic' ? 'phase1' : 'full',
             maxTokens: userMaxTokens || undefined,
+            minScoreThreshold: analysisDepth === 'full' ? config.minScoreThreshold : undefined,
           }),
         });
 
@@ -109,18 +137,19 @@ export async function POST(request: NextRequest) {
 
         const analysis = await analysisResponse.json();
 
-        // Update the paper with deep analysis data
+        // Step 4: Update the paper with deep analysis data
         await localService.updatePaper(paper.id, {
-          ai_summary: analysis.deep_analysis?.ai_summary || paper.ai_summary,
-          key_insights: analysis.deep_analysis?.key_insights || null,
-          engineering_notes: analysis.deep_analysis?.engineering_notes || null,
-          code_links: analysis.deep_analysis?.code_links || [],
-          key_formulas: analysis.deep_analysis?.key_formulas || null,
-          algorithms: analysis.deep_analysis?.algorithms || null,
-          flow_diagram: analysis.deep_analysis?.flow_diagram || null,
+          ai_summary: analysis.deepAnalysis?.ai_summary || paper.ai_summary,
+          key_insights: analysis.deepAnalysis?.key_insights || null,
+          engineering_notes: analysis.deepAnalysis?.engineering_notes || null,
+          code_links: analysis.deepAnalysis?.code_links || [],
+          key_formulas: analysis.deepAnalysis?.key_formulas || null,
+          algorithms: analysis.deepAnalysis?.algorithms || null,
+          flow_diagram: analysis.deepAnalysis?.flow_diagram || null,
           filter_score: analysis.score || paper.filter_score,
-          filter_reason: analysis.scoreReasoning || paper.filter_reason,
+          filter_reason: analysis.scoreReason || paper.filter_reason,
           is_deep_analyzed: true,
+          analysis_type: analysisDepth,
         });
 
         results.processed++;
@@ -140,12 +169,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       duration_seconds: duration,
+      analysis_depth: analysisDepth,
       total_pending: totalToProcess,
       ...results,
       skipped,
       message: maxPapers
-        ? `Deep analyzed ${results.processed} of ${totalToProcess} papers (${skipped} skipped due to limit)`
-        : `Deep analyzed all ${results.processed} pending papers`,
+        ? `Analyzed ${results.processed} of ${totalToProcess} papers (${skipped} skipped due to limit)`
+        : `Analyzed all ${results.processed} pending papers at depth=${analysisDepth}`,
     });
 
   } catch (error) {

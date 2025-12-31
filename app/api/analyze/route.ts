@@ -18,7 +18,9 @@ import { PaperTag } from '@/lib/db/types';
  *   "summary": string,
  *   "categories": string[],
  *   "fullText"?: string,  // Optional: full paper text for better analysis
- *   "skipDeepAnalysis"?: boolean,  // Skip deep analysis to save tokens
+ *   "skipDeepAnalysis"?: boolean,  // Skip deep analysis to save tokens (deprecated, use outputLevel)
+ *   "outputLevel"?: "phase1" | "full",  // Control output detail: phase1 (basic only) or full (all fields)
+ *   "minScoreThreshold"?: number,  // For full mode: threshold for detailed fields (algorithms/formulas/diagrams)
  *   "maxTokens"?: number  // Optional: override default max tokens (default: 2000 quick, 12000 deep)
  * }
  *
@@ -48,12 +50,21 @@ export async function POST(request: NextRequest) {
       categories = [],
       fullText,
       skipDeepAnalysis = false,
+      outputLevel,
+      minScoreThreshold,
       maxTokens: userMaxTokens
     } = body;
 
-    console.log(`[Analyze] Parsed fields - title: ${!!title}, summary: ${!!summary}`);
+    // Determine output level: outputLevel takes priority, fallback to skipDeepAnalysis
+    const effectiveOutputLevel = outputLevel || (skipDeepAnalysis ? 'phase1' : 'full');
+    const isPhase1Only = effectiveOutputLevel === 'phase1';
+
+    console.log(`[Analyze] Parsed fields - title: ${!!title}, summary: ${!!summary}, fullText: ${!!fullText}`);
     console.log(`[Analyze] title length: ${title?.length || 0}`);
     console.log(`[Analyze] summary length: ${summary?.length || 0}`);
+    if (fullText) {
+      console.log(`[Analyze] fullText length: ${fullText.length} (using full paper text)`);
+    }
 
     if (!title || !summary) {
       console.log('[Analyze] FAILED VALIDATION - Missing required fields');
@@ -67,18 +78,22 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`[Analyze] Analyzing paper: ${title.substring(0, 50)}...`);
+    console.log(`[Analyze] Output level: ${effectiveOutputLevel} (${isPhase1Only ? 'phase1 only - basic output' : 'full - all details'})`);
     const startTime = Date.now();
 
     const provider = (process.env.LLM_PROVIDER as LLMProvider) || 'glm';
-    const model = skipDeepAnalysis
-      ? process.env.GLM_QUICK_MODEL || 'glm-4.5-flash'
-      : process.env.GLM_DEEP_MODEL || 'glm-4.7';
+    // Use deep model for all analyzes (more accurate scoring)
+    const model = process.env.GLM_DEEP_MODEL || 'glm-4.7';
 
-    // Use user-provided maxTokens or default (2000 quick, 12000 deep)
-    const defaultMaxTokens = skipDeepAnalysis ? 2000 : 12000;
+    // Use user-provided maxTokens or default (4000 phase1 with fullText, 12000 full)
+    // Note: phase1 with fullText needs more tokens than abstract-only
+    const defaultMaxTokens = isPhase1Only ? 4000 : 12000;
     const maxTokens = userMaxTokens && userMaxTokens > 0 ? userMaxTokens : defaultMaxTokens;
 
+    console.log(`[Analyze] Model selection: outputLevel=${effectiveOutputLevel}, model=${model}`);
     console.log(`[Analyze] Using maxTokens: ${maxTokens} ${userMaxTokens ? '(user override)' : '(default)'}`);
+
+    const thresholdForDetails = minScoreThreshold || 7;  // Default to 7 if not provided
 
     const systemPrompt = `You are an expert AI/ML research analyst. Your task is to analyze research papers and provide a comprehensive assessment.
 
@@ -102,10 +117,11 @@ Rate the paper's value and significance from 1-10:
 - **5-6**: Incremental improvement, limited novelty
 - **1-4**: Minor work, poor quality, or not significant
 
-# Part 3: Deep Analysis${skipDeepAnalysis ? ' (SKIPPED)' : ''}
+# Part 3: Deep Analysis${isPhase1Only ? ' (PHASE 1 - Basic Output Only)' : ''}
 
-${!skipDeepAnalysis ? `Extract structured information from the paper:
+${!isPhase1Only ? `Extract structured information from the paper:
 
+**ALWAYS OUTPUT THESE BASIC FIELDS:**
 1. **ai_summary**: 3-5 sentence summary of the core contribution
 
 2. **key_insights**: 3-5 bullet points of key takeaways
@@ -118,6 +134,7 @@ ${!skipDeepAnalysis ? `Extract structured information from the paper:
    - If no actual code is provided, return empty array []
    - Each link should be a direct GitHub repo or project URL
 
+**ONLY OUTPUT THESE DETAILED FIELDS IF SCORE >= ${thresholdForDetails}:**
 5. **key_formulas**: Array of important formulas. Each should have:
    - "latex": LaTeX format (use \\( inline \\) or \\[ display \\])
    - "name": Formula name
@@ -130,19 +147,25 @@ ${!skipDeepAnalysis ? `Extract structured information from the paper:
 
 7. **flow_diagram**: For framework/method papers, provide:
    - "format": "mermaid" or "text"
-   - "content": Mermaid code OR step-by-step description` : '(Deep analysis was skipped)'}
+   - "content": Mermaid code OR step-by-step description
+
+IMPORTANT: After scoring the paper, if the score is < ${thresholdForDetails}, set key_formulas=null, algorithms=null, flow_diagram=null (do not extract these fields).` : 'For phase 1, only provide: ai_summary (3-5 sentences) and engineering_notes (brief practical applications)'}
 
 # Output Format
 
 Respond ONLY with valid JSON (no markdown, no code blocks):
 
-${skipDeepAnalysis ? `
+${isPhase1Only ? `
 {
   "tags": ["rl","llm","inference"],
   "confidence": "high",
   "classification_reasoning": "Brief explanation",
   "score": 8,
-  "score_reasoning": "Why this score"
+  "score_reasoning": "Why this score",
+  "deep_analysis": {
+    "ai_summary": "3-5 sentence summary",
+    "engineering_notes": "Brief practical applications"
+  }
 }
 ` : `
 {
@@ -155,7 +178,7 @@ ${skipDeepAnalysis ? `
     "ai_summary": "3-5 sentence summary",
     "key_insights": ["insight 1", "insight 2", "insight 3"],
     "engineering_notes": "Practical applications and framework recommendations",
-    "code_links": ["https://github.com/username/repo"],  // Only include if ACTUALLY provided in paper, else []
+    "code_links": ["https://github.com/username/repo"],
     "key_formulas": [
       {
         "latex": "\\\\(L(\\\\theta) = \\\\sum_{i=1}^n \\\\log p_\\\\theta(y_i|x_i)\\\)",
@@ -176,6 +199,8 @@ ${skipDeepAnalysis ? `
     }
   }
 }
+
+NOTE: If score < ${thresholdForDetails}, omit key_formulas, algorithms, and flow_diagram (set to null).
 `}`;
 
     const userMessage = `Title: ${title}
@@ -184,9 +209,13 @@ Abstract: ${summary}
 
 ArXiv Categories: ${categories.join(', ')}
 
-${fullText ? `Full Paper Text (first part):\n${fullText.substring(0, 10000)}...` : ''}
+${fullText ? `Full Paper Text:\n${fullText.substring(0, 150000)}${fullText.length > 150000 ? '\n\n[Text truncated due to length...]' : ''}` : ''}
 
 Analyze this paper. Respond with ONLY a JSON object.`;
+
+    console.log(`[Analyze] Calling LLM: provider=${provider}, model=${model}, maxTokens=${maxTokens}`);
+    console.log(`[Analyze] User message length: ${userMessage.length} chars (fullText: ${fullText?.length || 0} chars)`);
+    console.log(`[Analyze] System prompt length: ${systemPrompt.length} chars`);
 
     let response: string;
 

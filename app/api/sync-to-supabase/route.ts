@@ -100,6 +100,7 @@ export async function POST(request: NextRequest) {
           filter_score: paper.filter_score,
           filter_reason: paper.filter_reason || null,
           is_deep_analyzed: paper.is_deep_analyzed,
+          analysis_type: paper.analysis_type || null,
           version: 1,
         };
 

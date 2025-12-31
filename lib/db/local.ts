@@ -5,7 +5,7 @@
 
 import fs from 'fs/promises';
 import path from 'path';
-import { Paper, PaperTag, DailySummary } from '../db/types';
+import { Paper, PaperTag, DailySummary, AnalysisDepth } from '../db/types';
 
 const DATA_FILE = path.join(process.cwd(), 'local', 'data.json');
 
@@ -90,6 +90,7 @@ export class LocalPaperService {
       authors_short: string;
       summary: string | null;
       ai_summary: string | null;
+      engineering_notes: string | null;
       engineering_notes_preview?: string | null;
       filter_reason?: string | null;
       code_links?: string[] | null;
@@ -97,6 +98,7 @@ export class LocalPaperService {
       published_date: string;
       filter_score: number | null;
       is_deep_analyzed: boolean;
+      analysis_type: AnalysisDepth | null;
     }>;
     total: number;
     has_more: boolean;
@@ -174,6 +176,7 @@ export class LocalPaperService {
         published_date: p.published_date,
         filter_score: p.filter_score,
         is_deep_analyzed: p.is_deep_analyzed,
+        analysis_type: p.analysis_type || null,
       })),
       total,
       has_more: offset + limit < total,
@@ -236,6 +239,7 @@ export class LocalPaperService {
     const newPaper: Paper = {
       ...paper,
       id,
+      analysis_type: paper.analysis_type || null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };

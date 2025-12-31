@@ -146,6 +146,7 @@ export async function GET(request: NextRequest) {
                   key_insights: deepAnalysis?.key_insights,
                   engineering_notes: deepAnalysis?.engineering_notes,
                   is_deep_analyzed: !!deepAnalysis,
+                  analysis_type: !!deepAnalysis ? 'abstract' : null,
                   updated_at: new Date().toISOString(),
                 })
                 .eq('id', existing.id);
@@ -169,6 +170,7 @@ export async function GET(request: NextRequest) {
                   filter_score: score.score,
                   filter_reason: score.reason,
                   is_deep_analyzed: !!deepAnalysis,
+                  analysis_type: !!deepAnalysis ? 'abstract' : null,
                   version: 1,
                 });
 

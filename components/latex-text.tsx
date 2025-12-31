@@ -11,30 +11,64 @@ interface LatexTextProps {
 
 /**
  * Render text that may contain inline LaTeX formulas
- * Supports \(...\) for inline math
+ * Supports \(...\) and $...$ for inline math
  */
 export function LatexText({ text, className = '' }: LatexTextProps) {
   const parts = useMemo(() => {
-    // Match \(...\) patterns for inline math (non-greedy to handle nested parentheses)
-    const regex = /\\\(.*?\\\)/g;
     const result: Array<{ type: 'text' | 'latex'; content: string }> = [];
     let lastIndex = 0;
-    let match;
 
-    while ((match = regex.exec(text)) !== null) {
-      // Add text before this match
-      if (match.index > lastIndex) {
-        result.push({
-          type: 'text',
-          content: text.slice(lastIndex, match.index),
-        });
+    // Match both \(...\) and $...$ patterns
+    // Need to handle them carefully to avoid conflicts
+    let i = 0;
+    while (i < text.length) {
+      // Check for \( start
+      if (text.startsWith('\\(', i)) {
+        // Find closing \)
+        const endIdx = text.indexOf('\\)', i + 2);
+        if (endIdx !== -1) {
+          // Add text before this match
+          if (i > lastIndex) {
+            result.push({
+              type: 'text',
+              content: text.slice(lastIndex, i),
+            });
+          }
+          // Add the LaTeX content (without \( and \))
+          result.push({
+            type: 'latex',
+            content: text.slice(i + 2, endIdx),
+          });
+          lastIndex = endIdx + 2;
+          i = lastIndex;
+          continue;
+        }
       }
-      // Add the LaTeX content (strip the \( and \) delimiters)
-      result.push({
-        type: 'latex',
-        content: match[0].slice(2, -2), // Remove \( and \)
-      });
-      lastIndex = regex.lastIndex;
+
+      // Check for $ start (but not $$ which is display math)
+      if (text.charAt(i) === '$' && text.charAt(i + 1) !== '$') {
+        // Find closing $
+        const endIdx = text.indexOf('$', i + 1);
+        if (endIdx !== -1) {
+          // Add text before this match
+          if (i > lastIndex) {
+            result.push({
+              type: 'text',
+              content: text.slice(lastIndex, i),
+            });
+          }
+          // Add the LaTeX content (without the $ delimiters)
+          result.push({
+            type: 'latex',
+            content: text.slice(i + 1, endIdx),
+          });
+          lastIndex = endIdx + 1;
+          i = lastIndex;
+          continue;
+        }
+      }
+
+      i++;
     }
 
     // Add remaining text

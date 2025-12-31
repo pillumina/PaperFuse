@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { PaperTag, PaperDetailResponse } from '@/lib/db/types';
-import { ArrowLeft, ExternalLink, FileText, Github, AlertCircle, Sigma, Boxes, Info } from 'lucide-react';
+import { ArrowLeft, ExternalLink, FileText, Github, AlertCircle, Sigma, Boxes, Info, AlertTriangle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import dynamic from 'next/dynamic';
@@ -40,6 +40,7 @@ export default function PaperDetailPage() {
   const [paper, setPaper] = useState<PaperDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [mermaidRenderSuccess, setMermaidRenderSuccess] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (params.id) {
@@ -50,6 +51,7 @@ export default function PaperDetailPage() {
   async function loadPaper(id: string) {
     setLoading(true);
     setError(null);
+    setMermaidRenderSuccess(null);  // Reset mermaid render state
 
     try {
       const response = await fetch(`/api/papers/${id}`);
@@ -158,13 +160,44 @@ export default function PaperDetailPage() {
                 {TAG_LABELS[tag]}
               </Badge>
             ))}
-            {paper.is_deep_analyzed && (
-              <Badge variant="outline" className="text-xs">
+            {paper.analysis_type === 'full' && (
+              <Badge variant="outline" className="text-xs bg-green-50 dark:bg-green-900/20">
                 <FileText className="w-3 h-3 mr-1" />
-                Deep Analysis Available
+                Full Analysis
+              </Badge>
+            )}
+            {paper.analysis_type === 'standard' && (
+              <Badge variant="outline" className="text-xs bg-blue-50 dark:bg-blue-900/20">
+                <FileText className="w-3 h-3 mr-1" />
+                Standard Analysis
+              </Badge>
+            )}
+            {paper.analysis_type === 'basic' && (
+              <Badge variant="outline" className="text-xs bg-amber-50 dark:bg-amber-900/20">
+                <FileText className="w-3 h-3 mr-1" />
+                Basic Analysis
               </Badge>
             )}
           </div>
+
+          {/* Disclaimer for basic/standard analysis (no full text) */}
+          {(paper.analysis_type === 'basic' || paper.analysis_type === 'standard') && paper.is_deep_analyzed && (
+            <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-md p-3 mb-4">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-amber-800 dark:text-amber-200">
+                  <span className="font-medium">
+                    {paper.analysis_type === 'basic' ? '基于摘要分析' : '基于部分内容分析'}
+                  </span>
+                  <span className="text-amber-700 dark:text-amber-300 ml-1">
+                    {paper.analysis_type === 'basic'
+                      ? '— AI 内容仅基于论文摘要生成，可能存在不准确之处，仅供参考'
+                      : '— AI 内容基于论文摘要和部分章节（引言和结论）生成，详细信息可能不完整'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-2">
             <Link href={paper.arxiv_url} target="_blank" rel="noopener noreferrer">
@@ -184,7 +217,7 @@ export default function PaperDetailPage() {
 
         {/* Content Sections - Accordion */}
         <Accordion type="multiple" defaultValue={["ai-summary", "insights", "engineering", "code", "formulas", "algorithms", "flow-diagram"]} className="w-full">
-          {/* AI Summary */}
+          {/* AI Summary - always show if available */}
           {paper.ai_summary && (
             <AccordionItem value="ai-summary" className="mb-4 border rounded-lg px-4">
               <AccordionTrigger className="hover:no-underline py-4">
@@ -212,8 +245,8 @@ export default function PaperDetailPage() {
             </AccordionItem>
           )}
 
-          {/* Key Insights */}
-          {paper.key_insights && paper.key_insights.length > 0 && (
+          {/* Key Insights - only for full analysis */}
+          {paper.analysis_type === 'full' && paper.key_insights && paper.key_insights.length > 0 && (
             <AccordionItem value="insights" className="mb-4 border rounded-lg px-4">
               <AccordionTrigger className="hover:no-underline py-4">
                 <span className="text-lg font-semibold">Key Insights</span>
@@ -279,8 +312,8 @@ export default function PaperDetailPage() {
             </AccordionItem>
           )}
 
-          {/* Key Formulas */}
-          {paper.key_formulas && paper.key_formulas.length > 0 && (
+          {/* Key Formulas - only for full analysis */}
+          {paper.analysis_type === 'full' && paper.key_formulas && paper.key_formulas.length > 0 && (
             <AccordionItem value="formulas" className="mb-4 border rounded-lg px-4">
               <AccordionTrigger className="hover:no-underline py-4">
                 <span className="text-lg font-semibold flex items-center gap-2">
@@ -304,8 +337,8 @@ export default function PaperDetailPage() {
             </AccordionItem>
           )}
 
-          {/* Algorithms */}
-          {paper.algorithms && paper.algorithms.length > 0 && (
+          {/* Algorithms - only for full analysis */}
+          {paper.analysis_type === 'full' && paper.algorithms && paper.algorithms.length > 0 && (
             <AccordionItem value="algorithms" className="mb-4 border rounded-lg px-4">
               <AccordionTrigger className="hover:no-underline py-4">
                 <span className="text-lg font-semibold flex items-center gap-2">
@@ -342,8 +375,9 @@ export default function PaperDetailPage() {
             </AccordionItem>
           )}
 
-          {/* Flow Diagram */}
-          {paper.flow_diagram && paper.flow_diagram.content && (
+          {/* Flow Diagram - only for full analysis, and only if mermaid renders successfully */}
+          {paper.analysis_type === 'full' && paper.flow_diagram && paper.flow_diagram.content &&
+           (paper.flow_diagram.format !== 'mermaid' || mermaidRenderSuccess !== false) && (
             <AccordionItem value="flow-diagram" className="mb-4 border rounded-lg px-4">
               <AccordionTrigger className="hover:no-underline py-4">
                 <span className="text-lg font-semibold flex items-center gap-2">
@@ -353,7 +387,10 @@ export default function PaperDetailPage() {
               </AccordionTrigger>
               <AccordionContent className="pb-4 pt-0">
                 {paper.flow_diagram.format === 'mermaid' ? (
-                  <MermaidDiagram chart={paper.flow_diagram.content} />
+                  <MermaidDiagram
+                    chart={paper.flow_diagram.content}
+                    onRenderChange={(success) => setMermaidRenderSuccess(success)}
+                  />
                 ) : (
                   <div className="prose prose-sm dark:prose-invert max-w-none">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>

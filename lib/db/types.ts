@@ -3,6 +3,7 @@
 // ============================================
 
 export type PaperTag = 'rl' | 'llm' | 'inference';
+export type AnalysisDepth = 'basic' | 'standard' | 'full';  // Analysis depth level
 
 export type JobStatus = 'pending' | 'filtering' | 'analyzing' | 'completed' | 'failed';
 export type JobType = 'quick_score' | 'deep_analysis';
@@ -31,6 +32,8 @@ export interface Paper {
   key_formulas: KeyFormula[] | null;
   algorithms: Algorithm[] | null;
   flow_diagram: FlowDiagram | null;
+  // Analysis depth tracking
+  analysis_type: AnalysisDepth | null; // Type of analysis performed
 }
 
 export interface KeyFormula {
@@ -98,6 +101,7 @@ export interface PaperListItem {
   published_date: string;
   filter_score: number | null;
   is_deep_analyzed: boolean;
+  analysis_type: AnalysisDepth | null; // Type of analysis performed
 }
 
 export interface PaperDetailResponse extends Paper {

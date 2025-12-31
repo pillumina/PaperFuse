@@ -113,11 +113,19 @@ export class PaperService {
       authors_short: p.authors.length > 1
         ? `${p.authors[0]} et al.`
         : p.authors[0] || 'Unknown',
+      summary: p.summary,
       ai_summary: p.ai_summary,
+      engineering_notes: p.engineering_notes || null,
+      engineering_notes_preview: p.engineering_notes
+        ? p.engineering_notes.split('\n')[0].substring(0, 200)
+        : null,
+      filter_reason: p.filter_reason,
+      code_links: p.code_links,
       tags: p.tags,
       published_date: p.published_date,
       filter_score: p.filter_score,
       is_deep_analyzed: p.is_deep_analyzed,
+      analysis_type: p.analysis_type || null,
     }));
 
     return {
