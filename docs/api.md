@@ -1,6 +1,6 @@
-# Paperfuse API Documentation
+# PaperFuse API Documentation
 
-Complete API reference for Paperfuse.
+Complete API reference for PaperFuse.
 
 ---
 
@@ -35,21 +35,34 @@ Content-Type: application/json
   "title": "Scaling Laws for Language Models",
   "summary": "We study the scaling properties of language models...",
   "categories": ["cs.AI", "cs.LG"],
-  "fullText": "...",           // Optional: full paper text
-  "skipDeepAnalysis": false,    // Optional: skip deep analysis
-  "maxTokens": 12000            // Optional: override max tokens
+  "fullText": "...",              // Optional: full paper text
+  "outputLevel": "full",          // "phase1" (basic) or "full" (all fields)
+  "minScoreThreshold": 8,         // Optional: threshold for detailed fields in full mode
+  "maxTokens": 12000              // Optional: override max tokens
 }
 ```
+
+#### Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `title` | string | Required | Paper title |
+| `summary` | string | Required | Paper abstract |
+| `categories` | string[] | [] | ArXiv categories |
+| `fullText` | string | null | Full paper text (for better analysis) |
+| `outputLevel` | string | "full" | "phase1" (basic) or "full" (all fields) |
+| `minScoreThreshold` | number | 8 | Score threshold for algorithms/formulas/diagrams |
+| `maxTokens` | number | 12000 | Max tokens for LLM response (4000 for phase1) |
 
 #### Response
 
 ```json
 {
-  "tags": ["llm", "inference"],
+  "tags": ["llm"],
   "confidence": "high",
-  "reasoning": "Paper discusses inference optimization...",
+  "reasoning": "Paper discusses LLM scaling...",
   "score": 8,
-  "scoreReason": "Novel approach with significant practical impact",
+  "scoreReason": "Novel approach with significant impact",
   "deepAnalysis": {
     "ai_summary": "3-5 sentence summary...",
     "key_insights": ["insight 1", "insight 2", "insight 3"],
@@ -75,32 +88,39 @@ Content-Type: application/json
 | Parameter | Type | Default | Max | Description |
 |-----------|------|---------|-----|-------------|
 | `maxPapers` | number | 10 | 30 | Maximum papers to process |
-| `daysBack` | number | 3 | - | How many days back to fetch from ArXiv |
-| `skipAnalysis` | boolean | false | - | Skip deep analysis (save tokens) |
+| `daysBack` | number | 3 | - | Days back to fetch from ArXiv |
+| `depth` | string | "standard" | - | "basic", "standard", or "full" |
 | `clear` | boolean | false | - | Clear existing data before fetching |
 | `forceReanalyze` | boolean | false | - | Force re-analysis of existing papers |
-| `maxTokens` | number | 12000 | - | Override default max tokens for LLM |
+| `maxTokens` | number | null | - | Override max tokens for LLM |
+| `minScoreToSave` | number | null | - | Minimum score to save paper |
+
+#### Depth Modes
+
+- `basic` - Abstract only (fastest, no LaTeX download)
+- `standard` - Intro + conclusion for scoring, full text if score >= threshold
+- `full` - Full text with model deciding detailed output based on score
 
 #### Examples
 
 ```bash
-# Fetch and analyze 10 papers from last 3 days
+# Basic fetch (10 papers, standard depth)
 GET /api/fetch-papers?maxPapers=10
 
-# Fetch 20 papers from last 7 days
+# More papers, longer time range
 GET /api/fetch-papers?maxPapers=20&daysBack=7
 
-# Only classify, skip deep analysis (save tokens)
-GET /api/fetch-papers?maxPapers=20&skipAnalysis=true
+# Full depth analysis
+GET /api/fetch-papers?maxPapers=5&depth=full
 
-# Clear existing data and fetch fresh
-GET /api/fetch-papers?maxPapers=5&clear=true
+# Basic depth (abstract only, fastest)
+GET /api/fetch-papers?maxPapers=30&depth=basic
 
 # Force re-analyze existing papers
 GET /api/fetch-papers?maxPapers=10&forceReanalyze=true
 
-# Use higher token limit for more detailed analysis
-GET /api/fetch-papers?maxPapers=5&maxTokens=16000
+# Clear existing data and fetch fresh
+GET /api/fetch-papers?maxPapers=5&clear=true
 ```
 
 #### Response
@@ -109,16 +129,25 @@ GET /api/fetch-papers?maxPapers=5&maxTokens=16000
 {
   "success": true,
   "duration_seconds": 45,
+  "analysis_depth": "standard",
   "total_fetched": 40,
   "passed_filter": 15,
+  "skipped_duplicate": 3,
   "analyzed": 10,
   "deep_analyzed": 8,
+  "phase2_analyzed": 6,
   "stored": 10,
   "skipped_already_analyzed": 2,
+  "skipped_low_score": 1,
   "by_tag": {
     "rl": 2,
     "llm": 5,
     "inference": 3
+  },
+  "by_depth": {
+    "basic": 0,
+    "standard": 4,
+    "full": 6
   },
   "by_score": {
     "high": 6,
@@ -130,11 +159,11 @@ GET /api/fetch-papers?maxPapers=5&maxTokens=16000
 
 #### Flow
 
-1. Fetch from ArXiv (using `ARXIV_CATEGORIES` env var)
-2. Apply rule-based filter
-3. Check existing papers (skip already deep analyzed unless `forceReanalyze=true`)
-4. Call `/api/analyze` for each new paper
-5. Store to local JSON or Supabase
+1. **Step 0**: Check existing papers (deduplication)
+2. **Step 1**: Fetch from ArXiv (using `ARXIV_CATEGORIES` env var)
+3. **Step 2**: Apply rule-based filter + remove duplicates
+4. **Step 3**: Check which papers need re-analysis
+5. **Step 4 & 5**: Analyze and store papers one-by-one (incremental save for resilience)
 
 ---
 
@@ -229,10 +258,11 @@ GET /api/papers?limit=10&offset=20
       "engineering_notes_preview": "Practical applications...",
       "filter_reason": "Novel approach with practical impact",
       "code_links": ["https://github.com/..."],
-      "tags": ["llm", "inference"],
+      "tags": ["llm"],
       "published_date": "2025-01-15",
       "filter_score": 8,
-      "is_deep_analyzed": true
+      "is_deep_analyzed": true,
+      "analysis_type": "full"
     }
   ],
   "total": 42,
@@ -277,13 +307,14 @@ GET /api/papers?limit=10&offset=20
     "format": "mermaid",
     "content": "graph TD; A-->B; B-->C"
   },
-  "tags": ["llm", "inference"],
+  "tags": ["llm"],
   "published_date": "2025-01-15",
   "arxiv_url": "https://arxiv.org/abs/2401.12345",
   "pdf_url": "https://arxiv.org/pdf/2401.12345.pdf",
   "filter_score": 8,
   "filter_reason": "Novel approach with practical impact",
   "is_deep_analyzed": true,
+  "analysis_type": "full",
   "created_at": "2025-01-15T10:30:00Z",
   "updated_at": "2025-01-15T10:30:00Z"
 }
@@ -313,12 +344,7 @@ Authorization: Bearer YOUR_CRON_SECRET
   "duration_seconds": 120,
   "date": "2025-01-15",
   "total_processed": 30,
-  "total_stored": 25,
-  "tags": {
-    "rl": { "fetched": 10, "filtered": 8, "deep_analyzed": 2 },
-    "llm": { "fetched": 12, "filtered": 10, "deep_analyzed": 3 },
-    "inference": { "fetched": 8, "filtered": 7, "deep_analyzed": 2 }
-  }
+  "total_stored": 25
 }
 ```
 
@@ -332,16 +358,18 @@ LLM_PROVIDER=glm  # Options: glm, claude
 
 # GLM (ZhipuAI) - if LLM_PROVIDER=glm
 ZHIPUAI_API_KEY=your_key
-GLM_QUICK_MODEL=glm-4.5-flash  # Free tier
-GLM_DEEP_MODEL=glm-4.7          # Flagship
+GLM_DEEP_MODEL=glm-4.7
 
 # Claude (Anthropic) - if LLM_PROVIDER=claude
 ANTHROPIC_API_KEY=your_key
-CLAUDE_QUICK_MODEL=claude-haiku
-CLAUDE_DEEP_MODEL=claude-sonnet
 
 # ArXiv Configuration
-ARXIV_CATEGORIES=cs.AI,cs.LG,stat.ML
+ARXIV_CATEGORIES=cs.AI,cs.LG,cs.CL
+
+# Analysis Configuration
+MIN_SCORE_THRESHOLD=8        # Score threshold for detailed output
+MIN_SCORE_TO_SAVE=5          # Minimum score to save paper
+DEFAULT_ANALYSIS_DEPTH=standard  # basic, standard, or full
 
 # Supabase (optional - if not set, uses local JSON storage)
 NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
@@ -372,25 +400,9 @@ Common HTTP status codes:
 
 ---
 
-## Rate Limits & Token Usage
-
-| Operation | Token Usage (approx) | Cost (GLM) |
-|-----------|---------------------|------------|
-| Quick classification | ~300 | FREE |
-| Full analysis | ~2000 | ~0.003 RMB |
-| Deep analysis | ~12000 | ~0.018 RMB |
-
-**Optimization Tips:**
-1. Already deep analyzed papers are automatically skipped
-2. Use `skipAnalysis=true` for quick exploration
-3. Use `maxTokens` to control output length
-4. Adjust `daysBack` to limit fetch scope
-
----
-
 ## Storage Modes
 
-Paperfuse supports two storage modes:
+PaperFuse supports two storage modes:
 
 ### Local Mode (Default)
 - Stores data in `local/data.json`
