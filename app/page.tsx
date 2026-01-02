@@ -3,10 +3,13 @@
 import { useEffect, useState, Suspense, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { PaperCard } from '@/components/paper-card';
+import { PaperCardSkeleton } from '@/components/paper-card-skeleton';
+import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { PaperTag, PaperListItem } from '@/lib/db/types';
 import { Loader2, Calendar, ArrowUpDown, Search, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useDebounce } from '@/hooks/use-debounce';
 
 const TAG_LABELS: Record<PaperTag, string> = {
   rl: 'Reinforcement Learning',
@@ -39,9 +42,12 @@ function HomeContent() {
   const [totalCount, setTotalCount] = useState(0);
   const isInitializedRef = useRef(true);
 
+  // Debounce search query to reduce API calls
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
   useEffect(() => {
     loadPapers();
-  }, [selectedTag, dateRange, customDateFrom, customDateTo, sortBy, analysisFilter, searchQuery, currentPage]);
+  }, [selectedTag, dateRange, customDateFrom, customDateTo, sortBy, analysisFilter, debouncedSearchQuery, currentPage]);
 
   // Restore scroll position when returning from detail page
   useEffect(() => {
@@ -69,7 +75,7 @@ function HomeContent() {
     window.scrollTo(0, 0);
     // Clear saved page when filters change
     sessionStorage.removeItem('homePage');
-  }, [selectedTag, dateRange, sortBy, searchQuery]);
+  }, [selectedTag, dateRange, customDateFrom, customDateTo, sortBy, analysisFilter, searchQuery]);
 
   function loadPapers() {
     setLoading(true);
@@ -114,9 +120,9 @@ function HomeContent() {
     // Sorting
     params.append('sortBy', sortBy);
 
-    // Search query
-    if (searchQuery.trim()) {
-      params.append('search', searchQuery.trim());
+    // Search query (use debounced value)
+    if (debouncedSearchQuery.trim()) {
+      params.append('search', debouncedSearchQuery.trim());
     }
 
     // Pagination
@@ -341,8 +347,10 @@ function HomeContent() {
 
         {/* Content */}
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: PAPERS_PER_PAGE }).map((_, i) => (
+              <PaperCardSkeleton key={i} />
+            ))}
           </div>
         ) : error ? (
           <div className="text-center py-12">
@@ -352,11 +360,10 @@ function HomeContent() {
             </p>
           </div>
         ) : papers.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground">
-              No papers found matching your filters.
-            </p>
-          </div>
+          <EmptyState
+            type={debouncedSearchQuery ? 'no-results' : 'no-papers'}
+            filterDescription={debouncedSearchQuery || undefined}
+          />
         ) : (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {papers.map((paper) => (
@@ -370,17 +377,23 @@ function HomeContent() {
         )}
 
         {/* Pagination */}
-        {!loading && papers.length > 0 && totalPages > 1 && (
+        {papers.length > 0 && totalPages > 1 && (
           <div className="mt-8 flex items-center justify-center gap-4">
             <Button
               variant="outline"
               size="sm"
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
+              disabled={currentPage === 1 || loading}
               className="gap-1"
             >
-              <ChevronLeft className="w-4 h-4" />
-              Previous
+              {loading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <ChevronLeft className="w-4 h-4" />
+                  Previous
+                </>
+              )}
             </Button>
 
             <div className="flex items-center gap-2">
@@ -402,6 +415,7 @@ function HomeContent() {
                     variant={currentPage === pageNum ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => setCurrentPage(pageNum)}
+                    disabled={loading}
                     className="w-10 h-10"
                   >
                     {pageNum}
@@ -414,11 +428,17 @@ function HomeContent() {
               variant="outline"
               size="sm"
               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
+              disabled={currentPage === totalPages || loading}
               className="gap-1"
             >
-              Next
-              <ChevronRight className="w-4 h-4" />
+              {loading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  Next
+                  <ChevronRight className="w-4 h-4" />
+                </>
+              )}
             </Button>
           </div>
         )}
