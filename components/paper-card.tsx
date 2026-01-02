@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { memo } from 'react';
+import { memo, useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -32,7 +33,32 @@ function truncateReason(reason: string, maxLength = 100): string {
 }
 
 function PaperCardComponent({ paper, onNavigate, index = 0 }: PaperCardProps) {
+  const router = useRouter();
   const isNotAnalyzed = paper.analysis_type === 'none';
+  const timeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const detailUrl = `/papers/${paper.id}`;
+
+  // Prefetch detail page on hover
+  const handleMouseEnter = () => {
+    timeoutRef.current = setTimeout(() => {
+      router.prefetch(detailUrl);
+    }, 150);
+  };
+
+  const handleMouseLeave = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
     <TooltipProvider>
@@ -42,6 +68,8 @@ function PaperCardComponent({ paper, onNavigate, index = 0 }: PaperCardProps) {
         transition={{ duration: 0.3, delay: index * 0.05 }}
         whileHover={{ y: -4, transition: { duration: 0.2 } }}
         whileTap={{ scale: 0.98 }}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
       >
         <Card className={`h-full hover:shadow-lg transition-shadow ${isNotAnalyzed ? 'border-dashed border-muted-foreground/30' : ''}`}>
       <CardHeader className="pb-3">

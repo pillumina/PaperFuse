@@ -8,10 +8,12 @@ import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { MobileFilterDrawer } from '@/components/mobile-filter-drawer';
 import { PaperTag, PaperListItem } from '@/lib/db/types';
 import { Loader2, Calendar, ArrowUpDown, Search, X, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 import { useDebounce } from '@/hooks/use-debounce';
 import { motion, AnimatePresence } from 'framer-motion';
+import { usePrefetch } from '@/hooks/use-prefetch';
 
 const TAG_LABELS: Record<PaperTag, string> = {
   rl: 'Reinforcement Learning',
@@ -64,6 +66,25 @@ function HomeContent() {
   // Debounce search query to reduce API calls
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
+  // Prefetch for pagination
+  const { prefetch: prefetchPage } = usePrefetch();
+
+  // Build URL for a specific page (for prefetching)
+  const buildPageUrl = useCallback((page: number): string => {
+    const params = new URLSearchParams();
+    if (selectedTag !== 'all') params.set('tag', selectedTag);
+    if (dateRange !== '7days') params.set('dateRange', dateRange);
+    if (customDateFrom) params.set('dateFrom', customDateFrom);
+    if (customDateTo) params.set('dateTo', customDateTo);
+    if (sortBy !== 'date') params.set('sortBy', sortBy);
+    if (analysisFilter !== 'all') params.set('analysis', analysisFilter);
+    if (debouncedSearchQuery) params.set('search', debouncedSearchQuery);
+    if (page !== 1) params.set('page', String(page));
+
+    const queryString = params.toString();
+    return queryString ? `${pathname}?${queryString}` : pathname;
+  }, [selectedTag, dateRange, customDateFrom, customDateTo, sortBy, analysisFilter, debouncedSearchQuery, pathname]);
+
   useEffect(() => {
     loadPapers();
   }, [selectedTag, dateRange, customDateFrom, customDateTo, sortBy, analysisFilter, debouncedSearchQuery, currentPage]);
@@ -103,11 +124,55 @@ function HomeContent() {
   }, []);
 
   // Save scroll position and page before navigating to detail page
-  const saveScrollPosition = () => {
+  const saveScrollPosition = useCallback(() => {
     console.log('[Home] Saving page:', currentPage);
     sessionStorage.setItem('homeScrollPosition', String(window.scrollY));
     sessionStorage.setItem('homePage', String(currentPage));
-  };
+  }, [currentPage]);
+
+  // Clear search query
+  const clearSearch = useCallback(() => {
+    setSearchQuery('');
+  }, []);
+
+  // Handle date range change
+  const handleDateRangeChange = useCallback((range: DateRange) => {
+    setDateRange(range);
+    if (range === 'custom') {
+      const today = new Date();
+      const weekAgo = new Date(today);
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      setCustomDateFrom(weekAgo.toISOString().split('T')[0]);
+      setCustomDateTo(today.toISOString().split('T')[0]);
+    }
+  }, []);
+
+  // Handle tag selection
+  const handleTagSelect = useCallback((tag: PaperTag | 'all') => {
+    setSelectedTag(tag);
+  }, []);
+
+  // Handle analysis filter change
+  const handleAnalysisFilterChange = useCallback((filter: AnalysisFilter) => {
+    setAnalysisFilter(filter);
+  }, []);
+
+  // Handle page change
+  const handlePageChange = useCallback((page: number) => {
+    setCurrentPage(page);
+  }, []);
+
+  // Clear all filters
+  const clearAllFilters = useCallback(() => {
+    setSelectedTag('all');
+    setDateRange('7days');
+    setCustomDateFrom('');
+    setCustomDateTo('');
+    setSortBy('date');
+    setAnalysisFilter('all');
+    setSearchQuery('');
+    setCurrentPage(1);
+  }, []);
 
   // Handle filter changes that reset page
   useEffect(() => {
@@ -267,8 +332,30 @@ function HomeContent() {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Filters Bar */}
-        <div className="bg-card border rounded-lg p-4 mb-8 space-y-4">
+        {/* Mobile Filter Button */}
+        <div className="mb-4 sm:hidden flex items-center justify-between">
+          <MobileFilterDrawer
+            selectedTag={selectedTag}
+            setSelectedTag={setSelectedTag}
+            dateRange={dateRange}
+            setDateRange={setDateRange}
+            sortBy={sortBy}
+            setSortBy={setSortBy}
+            analysisFilter={analysisFilter}
+            setAnalysisFilter={setAnalysisFilter}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            customDateFrom={customDateFrom}
+            setCustomDateFrom={setCustomDateFrom}
+            customDateTo={customDateTo}
+            setCustomDateTo={setCustomDateTo}
+            onClearAll={clearAllFilters}
+            hasActiveFilters={!!(selectedTag !== 'all' || dateRange !== '7days' || sortBy !== 'date' || analysisFilter !== 'all' || searchQuery)}
+          />
+        </div>
+
+        {/* Filters Bar - desktop */}
+        <div className="bg-card border rounded-lg p-4 mb-8 space-y-4 hidden sm:block">
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -282,7 +369,7 @@ function HomeContent() {
             />
             {searchQuery && (
               <button
-                onClick={() => setSearchQuery('')}
+                onClick={clearSearch}
                 className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
                 <X className="w-4 h-4" />
@@ -300,7 +387,7 @@ function HomeContent() {
                   key={range}
                   variant={dateRange === range ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => setDateRange(range)}
+                  onClick={() => handleDateRangeChange(range)}
                   className="h-8"
                 >
                   {range === 'today' ? 'Today' : range === '7days' ? '7 Days' : range === '30days' ? '30 Days' : 'All'}
@@ -353,7 +440,7 @@ function HomeContent() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setDateRange('7days')}
+                    onClick={() => handleDateRangeChange('7days')}
                     className="h-8"
                   >
                     Cancel
@@ -364,15 +451,7 @@ function HomeContent() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    setDateRange('custom');
-                    // Set default to last 7 days
-                    const today = new Date();
-                    const weekAgo = new Date(today);
-                    weekAgo.setDate(weekAgo.getDate() - 7);
-                    setCustomDateFrom(weekAgo.toISOString().split('T')[0]);
-                    setCustomDateTo(today.toISOString().split('T')[0]);
-                  }}
+                  onClick={() => handleDateRangeChange('custom')}
                   className="h-8"
                 >
                   Custom
@@ -388,7 +467,7 @@ function HomeContent() {
               <Button
                 variant={selectedTag === 'all' ? 'default' : 'outline'}
                 size="sm"
-                onClick={() => setSelectedTag('all')}
+                onClick={() => handleTagSelect('all')}
                 className="rounded-full h-8"
               >
                 All {tagCounts.all !== undefined && `(${tagCounts.all})`}
@@ -397,7 +476,7 @@ function HomeContent() {
                 <Button
                   key={tag}
                   variant={selectedTag === tag ? 'default' : 'outline'}
-                  onClick={() => setSelectedTag(tag)}
+                  onClick={() => handleTagSelect(tag)}
                   className="rounded-full h-8"
                 >
                   {TAG_LABELS[tag]} {tagCounts[tag] !== undefined && `(${tagCounts[tag]})`}
@@ -415,7 +494,7 @@ function HomeContent() {
                   key={filter}
                   variant={analysisFilter === filter ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => setAnalysisFilter(filter)}
+                  onClick={() => handleAnalysisFilterChange(filter)}
                   className="h-8"
                 >
                   {filter === 'all' ? 'All Papers' : filter === 'analyzed' ? 'Analyzed' : 'Not Analyzed'}
@@ -444,16 +523,7 @@ function HomeContent() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  setSelectedTag('all');
-                  setDateRange('7days');
-                  setCustomDateFrom('');
-                  setCustomDateTo('');
-                  setSortBy('date');
-                  setAnalysisFilter('all');
-                  setSearchQuery('');
-                  setCurrentPage(1);
-                }}
+                onClick={clearAllFilters}
                 className="h-8 gap-1"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
@@ -514,7 +584,8 @@ function HomeContent() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+              onPointerEnter={() => currentPage > 1 && prefetchPage(buildPageUrl(currentPage - 1))}
               disabled={currentPage === 1 || loading}
               className="gap-1"
             >
@@ -546,7 +617,8 @@ function HomeContent() {
                     key={pageNum}
                     variant={currentPage === pageNum ? 'default' : 'outline'}
                     size="sm"
-                    onClick={() => setCurrentPage(pageNum)}
+                    onClick={() => handlePageChange(pageNum)}
+                    onPointerEnter={() => currentPage !== pageNum && prefetchPage(buildPageUrl(pageNum))}
                     disabled={loading}
                     className="w-10 h-10"
                   >
@@ -559,7 +631,8 @@ function HomeContent() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+              onPointerEnter={() => currentPage < totalPages && prefetchPage(buildPageUrl(currentPage + 1))}
               disabled={currentPage === totalPages || loading}
               className="gap-1"
             >
