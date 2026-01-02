@@ -139,6 +139,7 @@ export async function POST(request: NextRequest) {
 
         // Step 4: Update the paper with deep analysis data
         await localService.updatePaper(paper.id, {
+          tags: analysis.tags || paper.tags,
           ai_summary: analysis.deepAnalysis?.ai_summary || paper.ai_summary,
           key_insights: analysis.deepAnalysis?.key_insights || null,
           engineering_notes: analysis.deepAnalysis?.engineering_notes || null,

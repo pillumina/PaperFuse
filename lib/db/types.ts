@@ -3,7 +3,7 @@
 // ============================================
 
 export type PaperTag = 'rl' | 'llm' | 'inference';
-export type AnalysisDepth = 'basic' | 'standard' | 'full';  // Analysis depth level
+export type AnalysisDepth = 'none' | 'basic' | 'standard' | 'full';  // Analysis depth level
 
 export type JobStatus = 'pending' | 'filtering' | 'analyzing' | 'completed' | 'failed';
 export type JobType = 'quick_score' | 'deep_analysis';
@@ -18,7 +18,7 @@ export interface Paper {
   key_insights: string[] | null;
   engineering_notes: string | null;
   code_links: string[] | null;
-  tags: PaperTag[];
+  tags: string[]; // PaperTag[] when analyzed, ArXiv categories when not
   published_date: string; // ISO date string
   arxiv_url: string;
   pdf_url: string;
@@ -97,7 +97,7 @@ export interface PaperListItem {
   engineering_notes_preview?: string | null; // Preview for display
   filter_reason?: string | null; // Reason for the score
   code_links?: string[] | null; // Code and resources
-  tags: PaperTag[];
+  tags: string[]; // PaperTag[] when analyzed, ArXiv categories when not
   published_date: string;
   filter_score: number | null;
   is_deep_analyzed: boolean;

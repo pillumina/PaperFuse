@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { PaperCard } from '@/components/paper-card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -17,7 +18,11 @@ type DateRange = 'all' | '7days' | '30days';
 type SortBy = 'date' | 'score';
 const PAPERS_PER_PAGE = 9;
 
-export default function Home() {
+function HomeContent() {
+  const searchParams = useSearchParams();
+
+  // Initialize page from URL parameter on first render
+  const initialPage = parseInt(searchParams.get('page') || '1', 10);
   const [papers, setPapers] = useState<PaperListItem[]>([]);
   const [selectedTag, setSelectedTag] = useState<PaperTag | 'all'>('all');
   const [loading, setLoading] = useState(true);
@@ -26,12 +31,41 @@ export default function Home() {
   const [sortBy, setSortBy] = useState<SortBy>('date');
   const [tagCounts, setTagCounts] = useState<Record<string, number>>({});
   const [searchQuery, setSearchQuery] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(initialPage);
   const [totalCount, setTotalCount] = useState(0);
+  const isInitializedRef = useRef(true);
 
   useEffect(() => {
     loadPapers();
   }, [selectedTag, dateRange, sortBy, searchQuery, currentPage]);
+
+  // Restore scroll position when returning from detail page
+  useEffect(() => {
+    const savedScrollPosition = sessionStorage.getItem('homeScrollPosition');
+
+    // Restore scroll position
+    if (savedScrollPosition) {
+      console.log('[Home] Restoring scroll position:', savedScrollPosition);
+      window.scrollTo(0, parseInt(savedScrollPosition));
+      // Clear after use
+      sessionStorage.removeItem('homeScrollPosition');
+      sessionStorage.removeItem('homePage');
+    }
+  }, []);
+
+  // Save scroll position and page before navigating to detail page
+  const saveScrollPosition = () => {
+    console.log('[Home] Saving page:', currentPage);
+    sessionStorage.setItem('homeScrollPosition', String(window.scrollY));
+    sessionStorage.setItem('homePage', String(currentPage));
+  };
+
+  // Handle filter changes that reset page
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    // Clear saved page when filters change
+    sessionStorage.removeItem('homePage');
+  }, [selectedTag, dateRange, sortBy, searchQuery]);
 
   function loadPapers() {
     setLoading(true);
@@ -92,8 +126,12 @@ export default function Home() {
 
   // Reset to page 1 when filters change
   useEffect(() => {
-    setCurrentPage(1);
-  }, [selectedTag, dateRange, sortBy, searchQuery]);
+    // Only reset to page 1 if not restoring from URL parameter
+    const pageParam = searchParams.get('page');
+    if (!pageParam && isInitializedRef.current) {
+      setCurrentPage(1);
+    }
+  }, [selectedTag, dateRange, sortBy, searchQuery, searchParams]);
 
   const totalPages = Math.ceil(totalCount / PAPERS_PER_PAGE);
 
@@ -219,6 +257,7 @@ export default function Home() {
               <PaperCard
                 key={paper.id}
                 paper={paper}
+                onNavigate={saveScrollPosition}
               />
             ))}
           </div>
@@ -291,3 +330,17 @@ export default function Home() {
     </main>
   );
 }
+
+function HomeWrapper() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </main>
+    }>
+      <HomeContent />
+    </Suspense>
+  );
+}
+
+export default HomeWrapper;

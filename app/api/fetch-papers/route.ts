@@ -133,7 +133,7 @@ export async function GET(request: NextRequest) {
       by_tag: { rl: 0, llm: 0, inference: 0 },
       by_confidence: { high: 0, medium: 0, low: 0 },
       by_score: { high: 0, medium: 0, low: 0 }, // 7-10, 5-6, 1-4
-      by_depth: { basic: 0, standard: 0, full: 0 },
+      by_depth: { none: 0, basic: 0, standard: 0, full: 0 },
     };
 
     // Step 0: Check existing papers (for dedup before ArXiv fetch)
@@ -226,6 +226,10 @@ export async function GET(request: NextRequest) {
 
     console.log(`  ${papersNeedingAnalysis.length} need analysis, ${existingData.size} skip (already analyzed)`);
 
+    // Check if LLM analysis is enabled
+    const llmAnalysisEnabled = process.env.ENABLE_LLM_ANALYSIS === 'true';
+    console.log(`\n--- LLM Analysis: ${llmAnalysisEnabled ? 'ENABLED' : 'DISABLED'} ---`);
+
     // Step 4 & 5: Analyze and store papers one by one (incremental save for resilience)
     console.log(`\n--- Step 4 & 5: Analyze & Store Papers (incremental) ---`);
     console.log(`  Papers to process: ${papersNeedingAnalysis.length}`);
@@ -234,7 +238,69 @@ export async function GET(request: NextRequest) {
     for (const paper of papersNeedingAnalysis) {
       processedCount++;
       try {
-        console.log(`  [${processedCount}/${papersNeedingAnalysis.length}] Analyzing ${paper.id}...`);
+        console.log(`  [${processedCount}/${papersNeedingAnalysis.length}] Processing ${paper.id}...`);
+
+        // ===== LLM ANALYSIS DISABLED: Store ArXiv data only =====
+        if (!llmAnalysisEnabled) {
+          console.log(`    LLM analysis disabled, storing ArXiv data only...`);
+
+          const paperData = {
+            arxiv_id: paper.id,
+            title: paper.title,
+            authors: paper.authors,
+            summary: paper.summary,
+            ai_summary: null,
+            key_insights: null,
+            engineering_notes: null,
+            code_links: [],
+            key_formulas: null,
+            algorithms: null,
+            flow_diagram: null,
+            tags: paper.categories,  // Store ArXiv categories as tags
+            published_date: paper.published.toISOString().split('T')[0],
+            arxiv_url: paper.arxiv_url,
+            pdf_url: paper.pdf_url,
+            filter_score: null,
+            filter_reason: null,
+            is_deep_analyzed: false,
+            analysis_type: 'none' as AnalysisDepth,
+            version: 1,
+          };
+
+          if (useLocal) {
+            const localService = createLocalPaperService();
+            const existing = await localService.getPaperByArxivId(paper.id);
+
+            if (existing) {
+              await localService.updatePaper(existing.id, paperData);
+              console.log(`    Updated: ${paper.id} (no analysis)`);
+            } else {
+              await localService.insertPaper(paperData);
+              console.log(`    Inserted: ${paper.id} (no analysis)`);
+            }
+          } else {
+            const supabase = getSupabaseServerClient();
+            const { data: existing } = await supabase
+              .from('papers')
+              .select('id')
+              .eq('arxiv_id', paper.id)
+              .single();
+
+            if (existing) {
+              await supabase.from('papers').update(paperData).eq('id', existing.id);
+            } else {
+              await supabase.from('papers').insert(paperData);
+            }
+          }
+          results.stored++;
+          results.analyzed++;  // Count as "processed" even without LLM
+          results.by_depth.none++;
+          console.log(`    Done: ${paper.id} (${processedCount}/${papersNeedingAnalysis.length} stored)`);
+          continue;
+        }
+
+        // ===== LLM ANALYSIS ENABLED: Full analysis flow =====
+        console.log(`  Analyzing ${paper.id}...`);
         let analysis: any;
         let actualDepth: AnalysisDepth = analysisDepth;
         let fullTextResult;

@@ -41,12 +41,25 @@ export default function PaperDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mermaidRenderSuccess, setMermaidRenderSuccess] = useState<boolean | null>(null);
+  const [defaultOpenItems, setDefaultOpenItems] = useState<string[]>([]);
+  const [backUrl, setBackUrl] = useState('/');
 
   useEffect(() => {
     if (params.id) {
       loadPaper(params.id as string);
     }
   }, [params.id]);
+
+  // Set back URL with saved page number
+  useEffect(() => {
+    const savedPage = sessionStorage.getItem('homePage');
+    console.log('[Detail] Saved page from sessionStorage:', savedPage);
+    if (savedPage && savedPage !== '1') {
+      const url = `/?page=${savedPage}`;
+      console.log('[Detail] Setting back URL to:', url);
+      setBackUrl(url);
+    }
+  }, []);
 
   async function loadPaper(id: string) {
     setLoading(true);
@@ -64,6 +77,22 @@ export default function PaperDetailPage() {
 
       const data = await response.json();
       setPaper(data);
+
+      // Set default open items based on analysis state
+      if (data.analysis_type === 'none') {
+        // Not analyzed: only show abstract, so expand it
+        setDefaultOpenItems(['abstract']);
+      } else {
+        // Analyzed: expand everything except abstract
+        const items = ['ai-summary'];
+        if (data.key_insights?.length > 0) items.push('insights');
+        if (data.engineering_notes) items.push('engineering');
+        if (data.code_links?.length > 0) items.push('code');
+        if (data.key_formulas?.length > 0) items.push('formulas');
+        if (data.algorithms?.length > 0) items.push('algorithms');
+        if (data.flow_diagram?.content) items.push('flow-diagram');
+        setDefaultOpenItems(items);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -86,7 +115,7 @@ export default function PaperDetailPage() {
     return (
       <main className="min-h-screen bg-background">
         <div className="max-w-4xl mx-auto px-4 py-12">
-          <Link href="/">
+          <Link href={backUrl}>
             <Button variant="ghost" className="mb-6">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Papers
@@ -114,7 +143,7 @@ export default function PaperDetailPage() {
         <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
-          <Link href="/">
+          <Link href={backUrl}>
             <Button variant="ghost" className="mb-4">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Papers
@@ -155,11 +184,22 @@ export default function PaperDetailPage() {
           )}
 
           <div className="flex flex-wrap gap-2 mb-4">
-            {paper.tags.map((tag) => (
-              <Badge key={tag} variant="secondary" className={TAG_COLORS[tag]}>
-                {TAG_LABELS[tag]}
-              </Badge>
-            ))}
+            {paper.tags.map((tag) => {
+              // When not analyzed, show ArXiv categories as gray badges
+              if (paper.analysis_type === 'none') {
+                return (
+                  <Badge key={tag} variant="outline" className="text-xs text-muted-foreground">
+                    {tag}
+                  </Badge>
+                );
+              }
+              // When analyzed, use colored badges for PaperTags
+              return (
+                <Badge key={tag} variant="secondary" className={TAG_COLORS[tag as PaperTag]}>
+                  {TAG_LABELS[tag as PaperTag]}
+                </Badge>
+              );
+            })}
             {paper.analysis_type === 'full' && (
               <Badge variant="outline" className="text-xs bg-green-50 dark:bg-green-900/20">
                 <FileText className="w-3 h-3 mr-1" />
@@ -216,9 +256,9 @@ export default function PaperDetailPage() {
         </div>
 
         {/* Content Sections - Accordion */}
-        <Accordion type="multiple" defaultValue={["ai-summary", "insights", "engineering", "code", "formulas", "algorithms", "flow-diagram"]} className="w-full">
-          {/* AI Summary - always show if available */}
-          {paper.ai_summary && (
+        <Accordion type="multiple" defaultValue={defaultOpenItems} className="w-full">
+          {/* AI Summary - only show when analyzed */}
+          {paper.analysis_type !== 'none' && paper.ai_summary && (
             <AccordionItem value="ai-summary" className="mb-4 border rounded-lg px-4">
               <AccordionTrigger className="hover:no-underline py-4">
                 <span className="text-lg font-semibold">AI Summary</span>
@@ -231,16 +271,16 @@ export default function PaperDetailPage() {
             </AccordionItem>
           )}
 
-          {/* Original Abstract */}
+          {/* Original Abstract - always show when available */}
           {paper.summary && (
             <AccordionItem value="abstract" className="mb-4 border rounded-lg px-4">
               <AccordionTrigger className="hover:no-underline py-4">
                 <span className="text-lg font-semibold">Original Abstract</span>
               </AccordionTrigger>
               <AccordionContent className="pb-4 pt-0">
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  {paper.summary}
-                </p>
+                <div className="text-sm text-muted-foreground leading-relaxed">
+                  <LatexText text={paper.summary} />
+                </div>
               </AccordionContent>
             </AccordionItem>
           )}
@@ -266,8 +306,8 @@ export default function PaperDetailPage() {
             </AccordionItem>
           )}
 
-          {/* Engineering Notes */}
-          {paper.engineering_notes && (
+          {/* Engineering Notes - only show when analyzed */}
+          {paper.analysis_type !== 'none' && paper.engineering_notes && (
             <AccordionItem value="engineering" className="mb-4 border rounded-lg px-4">
               <AccordionTrigger className="hover:no-underline py-4">
                 <span className="text-lg font-semibold flex items-center gap-2">

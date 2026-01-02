@@ -26,10 +26,10 @@ export async function fetchArxivPapers(options: ArxivFetchOptions): Promise<Arxi
     daysBack = 1,
   } = options;
 
-  // Calculate date range
-  const endDate = new Date();
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - daysBack);
+  // Calculate date range using UTC timestamps
+  const now = Date.now();
+  const daysBackMs = daysBack * 24 * 60 * 60 * 1000;
+  const startDateTimestamp = now - daysBackMs;
 
   // Build search query for each category
   // ArXiv API doesn't have date filtering, so we fetch recent and filter client-side
@@ -61,9 +61,11 @@ export async function fetchArxivPapers(options: ArxivFetchOptions): Promise<Arxi
     const xmlText = await response.text();
     const papers = parseArxivXML(xmlText);
 
-    // Filter by date range (ArXiv API doesn't support this natively)
+    // Filter by date range using UTC timestamps
+    // ArXiv dates are in UTC format, so we compare timestamps directly
     const filteredPapers = papers.filter(paper => {
-      return paper.published >= startDate && paper.published <= endDate;
+      const paperTime = paper.published.getTime();
+      return paperTime >= startDateTimestamp && paperTime <= now;
     });
 
     return filteredPapers;

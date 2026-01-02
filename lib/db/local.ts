@@ -94,7 +94,7 @@ export class LocalPaperService {
       engineering_notes_preview?: string | null;
       filter_reason?: string | null;
       code_links?: string[] | null;
-      tags: PaperTag[];
+      tags: string[];
       published_date: string;
       filter_score: number | null;
       is_deep_analyzed: boolean;
