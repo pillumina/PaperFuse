@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { PaperTag, PaperListItem, AnalysisDepth } from '@/lib/db/types';
 import { ExternalLink, FileText, Wrench, Info, Code2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 const TAG_COLORS: Record<PaperTag, string> = {
   rl: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
@@ -21,6 +22,7 @@ const TAG_LABELS: Record<PaperTag, string> = {
 interface PaperCardProps {
   paper: PaperListItem;
   onNavigate?: () => void;
+  index?: number;
 }
 
 function truncateReason(reason: string, maxLength = 100): string {
@@ -28,12 +30,19 @@ function truncateReason(reason: string, maxLength = 100): string {
   return reason.substring(0, maxLength) + '...';
 }
 
-export function PaperCard({ paper, onNavigate }: PaperCardProps) {
+export function PaperCard({ paper, onNavigate, index = 0 }: PaperCardProps) {
   const isNotAnalyzed = paper.analysis_type === 'none';
 
   return (
     <TooltipProvider>
-      <Card className={`hover:shadow-md transition-shadow ${isNotAnalyzed ? 'border-dashed border-muted-foreground/30' : ''}`}>
+      <motion.div
+        initial={{ opacity: 0, y: 20, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.3, delay: index * 0.05 }}
+        whileHover={{ y: -4, transition: { duration: 0.2 } }}
+        whileTap={{ scale: 0.98 }}
+      >
+        <Card className={`h-full hover:shadow-lg transition-shadow ${isNotAnalyzed ? 'border-dashed border-muted-foreground/30' : ''}`}>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
@@ -177,6 +186,7 @@ export function PaperCard({ paper, onNavigate }: PaperCardProps) {
         </div>
       </CardFooter>
     </Card>
+      </motion.div>
     </TooltipProvider>
   );
 }

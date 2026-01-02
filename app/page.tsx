@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { PaperTag, PaperListItem } from '@/lib/db/types';
 import { Loader2, Calendar, ArrowUpDown, Search, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useDebounce } from '@/hooks/use-debounce';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const TAG_LABELS: Record<PaperTag, string> = {
   rl: 'Reinforcement Learning',
@@ -41,6 +42,7 @@ function HomeContent() {
   const [currentPage, setCurrentPage] = useState(initialPage);
   const [totalCount, setTotalCount] = useState(0);
   const isInitializedRef = useRef(true);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Debounce search query to reduce API calls
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
@@ -157,18 +159,67 @@ function HomeContent() {
 
   const totalPages = Math.ceil(totalCount / PAPERS_PER_PAGE);
 
+  // Keyboard shortcuts (must be after totalPages is calculated)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in an input
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      ) {
+        // If Escape is pressed, clear search and blur input
+        if (e.key === 'Escape' && searchQuery) {
+          e.preventDefault();
+          setSearchQuery('');
+          if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+          }
+        }
+        return;
+      }
+
+      // '/' to focus search
+      if (e.key === '/') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+
+      // Arrow keys for pagination
+      if (e.key === 'ArrowLeft' && currentPage > 1 && !loading) {
+        e.preventDefault();
+        setCurrentPage(p => p - 1);
+      }
+      if (e.key === 'ArrowRight' && currentPage < totalPages && !loading) {
+        e.preventDefault();
+        setCurrentPage(p => p + 1);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [searchQuery, currentPage, totalPages, loading]);
+
   return (
     <main className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b bg-card">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">
-              PaperFuse
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Daily AI research papers with engineering insights
-            </p>
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">
+                PaperFuse
+              </h1>
+              <p className="text-muted-foreground mt-1">
+                Daily AI research papers with engineering insights
+              </p>
+            </div>
+            <div className="hidden sm:block text-xs text-muted-foreground">
+              <div className="flex flex-col gap-1 text-right">
+                <span><kbd className="px-1.5 py-0.5 rounded bg-muted border">/</kbd> Focus search</span>
+                <span><kbd className="px-1.5 py-0.5 rounded bg-muted border">←</kbd> <kbd className="px-1.5 py-0.5 rounded bg-muted border">→</kbd> Navigate pages</span>
+                <span><kbd className="px-1.5 py-0.5 rounded bg-muted border">Esc</kbd> Clear search</span>
+              </div>
+            </div>
           </div>
         </div>
       </header>
@@ -180,8 +231,9 @@ function HomeContent() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
+              ref={searchInputRef}
               type="text"
-              placeholder="Search papers by title, author, or keywords..."
+              placeholder="Search papers by title, author, or keywords... (Press / to focus)"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-10 py-2 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
@@ -365,15 +417,29 @@ function HomeContent() {
             filterDescription={debouncedSearchQuery || undefined}
           />
         ) : (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {papers.map((paper) => (
-              <PaperCard
-                key={paper.id}
-                paper={paper}
-                onNavigate={saveScrollPosition}
-              />
-            ))}
-          </div>
+          <motion.div
+            className="grid gap-6 md:grid-cols-2 lg:grid-cols-3"
+            initial="hidden"
+            animate="visible"
+            variants={{
+              visible: {
+                transition: {
+                  staggerChildren: 0.1
+                }
+              }
+            }}
+          >
+            <AnimatePresence mode="wait">
+              {papers.map((paper, index) => (
+                <PaperCard
+                  key={paper.id}
+                  paper={paper}
+                  onNavigate={saveScrollPosition}
+                  index={index}
+                />
+              ))}
+            </AnimatePresence>
+          </motion.div>
         )}
 
         {/* Pagination */}
