@@ -77,6 +77,7 @@ export class LocalPaperService {
     offset?: number;
     minScore?: number;
     deepAnalyzedOnly?: boolean;
+    analyzedOnly?: boolean;
     dateFrom?: string;
     dateTo?: string;
     sortBy?: 'date' | 'score';
@@ -117,6 +118,12 @@ export class LocalPaperService {
 
     if (options.deepAnalyzedOnly) {
       papers = papers.filter(p => p.is_deep_analyzed);
+    }
+
+    if (options.analyzedOnly === true) {
+      papers = papers.filter(p => p.analysis_type && p.analysis_type !== 'none');
+    } else if (options.analyzedOnly === false) {
+      papers = papers.filter(p => !p.analysis_type || p.analysis_type === 'none');
     }
 
     if (options.dateFrom) {

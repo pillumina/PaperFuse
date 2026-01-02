@@ -52,12 +52,6 @@ export function PaperCard({ paper, onNavigate }: PaperCardProps) {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {/* Show "Not Analyzed" badge when analysis_type === 'none' */}
-            {isNotAnalyzed && (
-              <Badge variant="outline" className="text-xs bg-muted text-muted-foreground">
-                Not Analyzed
-              </Badge>
-            )}
             {/* Show score when analyzed */}
             {!isNotAnalyzed && paper.filter_score && (
               <div className="flex items-center gap-1.5 text-sm">

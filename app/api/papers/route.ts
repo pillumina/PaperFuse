@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
     const minScore = searchParams.get('minScore') ? parseInt(searchParams.get('minScore')!) : null;
     const deepAnalyzedOnly = searchParams.get('deepAnalyzedOnly') === 'true';
+    const analyzedOnly = searchParams.get('analyzedOnly');
     const dateFrom = searchParams.get('dateFrom') || undefined;
     const dateTo = searchParams.get('dateTo') || undefined;
     const sortBy = searchParams.get('sortBy') as 'date' | 'score' | null;
@@ -32,6 +33,7 @@ export async function GET(request: NextRequest) {
         offset,
         minScore: minScore || undefined,
         deepAnalyzedOnly,
+        analyzedOnly: analyzedOnly === 'true' ? true : analyzedOnly === 'false' ? false : undefined,
         dateFrom,
         dateTo,
         sortBy: sortBy || undefined,
@@ -44,7 +46,7 @@ export async function GET(request: NextRequest) {
     const supabase = getSupabaseServerClient();
     let query = supabase
       .from('papers')
-      .select('id, arxiv_id, title, authors, ai_summary, engineering_notes, code_links, tags, published_date, filter_score, filter_reason, is_deep_analyzed', { count: 'exact' });
+      .select('id, arxiv_id, title, authors, ai_summary, engineering_notes, code_links, tags, published_date, filter_score, filter_reason, is_deep_analyzed, analysis_type', { count: 'exact' });
 
     // Apply filters
     if (search) {
@@ -62,6 +64,14 @@ export async function GET(request: NextRequest) {
 
     if (deepAnalyzedOnly) {
       query = query.eq('is_deep_analyzed', true);
+    }
+
+    // Analysis filter
+    if (analyzedOnly === 'true') {
+      query = query.not('analysis_type', 'is', null);
+      query = query.neq('analysis_type', 'none');
+    } else if (analyzedOnly === 'false') {
+      query = query.eq('analysis_type', 'none');
     }
 
     if (dateFrom) {
@@ -96,6 +106,7 @@ export async function GET(request: NextRequest) {
       authors_short: p.authors.length > 1
         ? `${p.authors[0]} et al.`
         : p.authors[0] || 'Unknown',
+      summary: null, // Not included in list view
       ai_summary: p.ai_summary,
       engineering_notes: p.engineering_notes, // Full text for tooltip
       engineering_notes_preview: p.engineering_notes ? getFirstLine(p.engineering_notes) : null, // Preview for display
@@ -105,6 +116,7 @@ export async function GET(request: NextRequest) {
       published_date: p.published_date,
       filter_score: p.filter_score,
       is_deep_analyzed: p.is_deep_analyzed,
+      analysis_type: p.analysis_type || null,
     }));
 
     return NextResponse.json({

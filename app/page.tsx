@@ -14,8 +14,9 @@ const TAG_LABELS: Record<PaperTag, string> = {
   inference: 'Inference & Systems',
 };
 
-type DateRange = 'all' | '7days' | '30days';
+type DateRange = 'all' | 'today' | '7days' | '30days' | 'custom';
 type SortBy = 'date' | 'score';
+type AnalysisFilter = 'all' | 'analyzed' | 'not-analyzed';
 const PAPERS_PER_PAGE = 9;
 
 function HomeContent() {
@@ -28,7 +29,10 @@ function HomeContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<DateRange>('7days');
+  const [customDateFrom, setCustomDateFrom] = useState<string>('');
+  const [customDateTo, setCustomDateTo] = useState<string>('');
   const [sortBy, setSortBy] = useState<SortBy>('date');
+  const [analysisFilter, setAnalysisFilter] = useState<AnalysisFilter>('all');
   const [tagCounts, setTagCounts] = useState<Record<string, number>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(initialPage);
@@ -37,7 +41,7 @@ function HomeContent() {
 
   useEffect(() => {
     loadPapers();
-  }, [selectedTag, dateRange, sortBy, searchQuery, currentPage]);
+  }, [selectedTag, dateRange, customDateFrom, customDateTo, sortBy, analysisFilter, searchQuery, currentPage]);
 
   // Restore scroll position when returning from detail page
   useEffect(() => {
@@ -81,10 +85,13 @@ function HomeContent() {
     // Date range
     if (dateRange !== 'all') {
       const today = new Date();
-      const toDate = today.toISOString().split('T')[0];
+      const toDate = dateRange === 'custom' && customDateTo ? customDateTo : today.toISOString().split('T')[0];
       params.append('dateTo', toDate);
 
-      if (dateRange === '7days') {
+      if (dateRange === 'today') {
+        // Today only
+        params.append('dateFrom', toDate);
+      } else if (dateRange === '7days') {
         const fromDate = new Date(today);
         fromDate.setDate(fromDate.getDate() - 7);
         params.append('dateFrom', fromDate.toISOString().split('T')[0]);
@@ -92,7 +99,16 @@ function HomeContent() {
         const fromDate = new Date(today);
         fromDate.setDate(fromDate.getDate() - 30);
         params.append('dateFrom', fromDate.toISOString().split('T')[0]);
+      } else if (dateRange === 'custom' && customDateFrom) {
+        params.append('dateFrom', customDateFrom);
       }
+    }
+
+    // Analysis filter
+    if (analysisFilter === 'analyzed') {
+      params.append('analyzedOnly', 'true');
+    } else if (analysisFilter === 'not-analyzed') {
+      params.append('analyzedOnly', 'false');
     }
 
     // Sorting
@@ -131,7 +147,7 @@ function HomeContent() {
     if (!pageParam && isInitializedRef.current) {
       setCurrentPage(1);
     }
-  }, [selectedTag, dateRange, sortBy, searchQuery, searchParams]);
+  }, [selectedTag, dateRange, customDateFrom, customDateTo, sortBy, analysisFilter, searchQuery, searchParams]);
 
   const totalPages = Math.ceil(totalCount / PAPERS_PER_PAGE);
 
@@ -178,8 +194,8 @@ function HomeContent() {
           <div className="flex items-center gap-3">
             <Calendar className="w-4 h-4 text-muted-foreground" />
             <span className="text-sm font-medium">Date:</span>
-            <div className="flex gap-2">
-              {(['7days', '30days', 'all'] as DateRange[]).map((range) => (
+            <div className="flex gap-2 flex-wrap">
+              {(['today', '7days', '30days', 'all'] as DateRange[]).map((range) => (
                 <Button
                   key={range}
                   variant={dateRange === range ? 'default' : 'outline'}
@@ -187,9 +203,56 @@ function HomeContent() {
                   onClick={() => setDateRange(range)}
                   className="h-8"
                 >
-                  {range === '7days' ? '7 Days' : range === '30days' ? '30 Days' : 'All'}
+                  {range === 'today' ? 'Today' : range === '7days' ? '7 Days' : range === '30days' ? '30 Days' : 'All'}
                 </Button>
               ))}
+              {/* Custom Date Range - show when selected */}
+              {dateRange === 'custom' && (
+                <div className="flex items-center gap-2 ml-2">
+                  <input
+                    type="date"
+                    value={customDateFrom}
+                    onChange={(e) => setCustomDateFrom(e.target.value)}
+                    max={customDateTo || new Date().toISOString().split('T')[0]}
+                    className="px-2 py-1 text-sm border rounded-md bg-background"
+                  />
+                  <span className="text-muted-foreground">to</span>
+                  <input
+                    type="date"
+                    value={customDateTo}
+                    onChange={(e) => setCustomDateTo(e.target.value)}
+                    min={customDateFrom}
+                    max={new Date().toISOString().split('T')[0]}
+                    className="px-2 py-1 text-sm border rounded-md bg-background"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDateRange('7days')}
+                    className="h-8"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              )}
+              {dateRange !== 'custom' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setDateRange('custom');
+                    // Set default to last 7 days
+                    const today = new Date();
+                    const weekAgo = new Date(today);
+                    weekAgo.setDate(weekAgo.getDate() - 7);
+                    setCustomDateFrom(weekAgo.toISOString().split('T')[0]);
+                    setCustomDateTo(today.toISOString().split('T')[0]);
+                  }}
+                  className="h-8"
+                >
+                  Custom
+                </Button>
+              )}
             </div>
           </div>
 
@@ -213,6 +276,24 @@ function HomeContent() {
                   className="rounded-full h-8"
                 >
                   {TAG_LABELS[tag]} {tagCounts[tag] !== undefined && `(${tagCounts[tag]})`}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {/* Analysis Filter */}
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium">Analysis:</span>
+            <div className="flex gap-2">
+              {(['all', 'analyzed', 'not-analyzed'] as AnalysisFilter[]).map((filter) => (
+                <Button
+                  key={filter}
+                  variant={analysisFilter === filter ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setAnalysisFilter(filter)}
+                  className="h-8"
+                >
+                  {filter === 'all' ? 'All Papers' : filter === 'analyzed' ? 'Analyzed' : 'Not Analyzed'}
                 </Button>
               ))}
             </div>
