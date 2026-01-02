@@ -15,6 +15,8 @@ import {
   DeepAnalysisResult,
   getApiModelName,
 } from './types';
+import { generateClassificationPrompt, generateTagContext, getTagContext, getTopicKeywords, getArxivCategoryHints } from './prompts';
+import { getTopics, getTopicKeys, isValidTopic } from '../topics';
 import { PaperTag } from '../db/types';
 
 /**
@@ -200,31 +202,11 @@ async function callClaudeWithRetry(
 export async function classifyPaper(
   input: { title: string; summary: string; categories: string[] },
   provider: LLMProvider = getDefaultProvider()
-): Promise<{ tags: PaperTag[]; confidence: 'high' | 'medium' | 'low'; reasoning: string }> {
+): Promise<{ tags: string[]; confidence: 'high' | 'medium' | 'low'; reasoning: string }> {
   const model = getModelForProvider(provider, 'quick');
 
-  const systemPrompt = `You are an expert AI/ML research paper classifier.
-
-Your task is to analyze a paper's title and abstract to determine which research domain(s) it belongs to.
-
-Domains:
-- **rl**: Reinforcement Learning - RL algorithms, training methods, exploration, exploitation, policy optimization, value functions, actor-critic, PPO, DQN, etc.
-- **llm**: Large Language Models - LLM architecture, training, alignment, capabilities, language models, transformers for NLP, etc.
-- **inference**: LLM Inference & Systems - inference optimization, quantization, distillation, serving systems, vLLM, TensorRT-LLM, deployment, etc.
-
-IMPORTANT:
-- A paper CAN belong to MULTIPLE domains (e.g., an LLM paper using RLHF could be both "llm" and "rl")
-- If the paper is about LLM inference/serving/optimization, include "inference" tag
-- Only include domains you are confident about
-- At least one tag must be provided
-
-Respond ONLY with a valid JSON object. No markdown, no code blocks, no extra text.
-
-Example format:
-{"tags":["llm","rl"],"confidence":"high","reasoning":"Paper discusses RLHF for language models"}
-
-Valid tags are only: rl, llm, inference
-Valid confidence values are only: high, medium, low`;
+  // Generate dynamic system prompt based on configured topics
+  const systemPrompt = generateClassificationPrompt();
 
   const userMessage = `Title: ${input.title}
 
@@ -251,10 +233,15 @@ Classify this paper. Respond with ONLY a JSON object.`;
  * Parse classification response
  */
 function parseClassificationResponse(text: string, categories: string[]): {
-  tags: PaperTag[];
+  tags: string[];
   confidence: 'high' | 'medium' | 'low';
   reasoning: string;
 } {
+  // Get valid topic keys and keyword hints
+  const validTopicKeys = getTopicKeys();
+  const topicKeywords = getTopicKeywords();
+  const arxivHints = getArxivCategoryHints();
+
   // Log raw response for debugging
   const trimmedText = text.trim();
 
@@ -280,16 +267,16 @@ function parseClassificationResponse(text: string, categories: string[]): {
     const parsed = JSON.parse(jsonText);
     console.log('[Classification] Successfully parsed JSON:', JSON.stringify(parsed));
 
-    // Validate and filter tags
-    let tags: PaperTag[] = [];
+    // Validate and filter tags against dynamic topic list
+    let tags: string[] = [];
     if (Array.isArray(parsed.tags)) {
-      tags = parsed.tags.filter((t: string) => ['rl', 'llm', 'inference'].includes(t));
+      tags = parsed.tags.filter((t: string) => validTopicKeys.includes(t));
     }
 
     // Ensure at least one tag
     if (tags.length === 0) {
-      console.warn('[Classification] No valid tags found, defaulting to llm');
-      tags = ['llm'];
+      console.warn('[Classification] No valid tags found, defaulting to first topic');
+      tags = [validTopicKeys[0]];
     }
 
     // Validate confidence
@@ -307,41 +294,32 @@ function parseClassificationResponse(text: string, categories: string[]): {
     console.error('[Classification] Attempted to parse:', jsonText.substring(0, 300));
     console.error('[Classification] Parse error:', error);
 
-    // Fallback: use keyword matching on the response AND categories
+    // Fallback: use keyword matching with dynamic topic keywords
     const combinedText = (trimmedText + ' ' + categories.join(' ')).toLowerCase();
-    const tags: PaperTag[] = [];
+    const tags: string[] = [];
 
-    // Check for RL indicators
-    if (combinedText.includes('reinforcement') || combinedText.includes('rl') ||
-        combinedText.includes('policy optimization') || combinedText.includes('ppo') ||
-        combinedText.includes('actor-critic') || combinedText.includes('q-learning')) {
-      tags.push('rl');
-    }
+    // Check each topic's keywords
+    for (const topicKey of validTopicKeys) {
+      const keywords = topicKeywords[topicKey] || [];
 
-    // Check for LLM indicators
-    if (combinedText.includes('llm') || combinedText.includes('language model') ||
-        combinedText.includes('large language') || combinedText.includes('transformer') ||
-        combinedText.includes('gpt') || combinedText.includes('bert')) {
-      tags.push('llm');
-    }
-
-    // Check for inference indicators
-    if (combinedText.includes('inference') || combinedText.includes('serving') ||
-        combinedText.includes('quantization') || combinedText.includes('distillation') ||
-        combinedText.includes('vllm') || combinedText.includes('tensorrt')) {
-      tags.push('inference');
+      // Check if any keyword matches
+      if (keywords.some(kw => combinedText.includes(kw.toLowerCase()))) {
+        tags.push(topicKey);
+      }
     }
 
     // ArXiv category hints
     const catsLower = categories.join(' ').toLowerCase();
-    if (catsLower.includes('cs.ro') || catsLower.includes('robotics')) {
-      if (!tags.includes('rl')) tags.push('rl');
-    }
-    if (catsLower.includes('cs.ai') || catsLower.includes('cs.cl')) {
-      if (!tags.includes('llm')) tags.push('llm');
+    for (const [topicKey, hints] of Object.entries(arxivHints)) {
+      if (hints.some(hint => catsLower.includes(hint.toLowerCase()))) {
+        if (!tags.includes(topicKey)) {
+          tags.push(topicKey);
+        }
+      }
     }
 
-    const fallbackTags: PaperTag[] = tags.length > 0 ? (tags as PaperTag[]) : ['llm'];
+    // Ensure at least one tag
+    const fallbackTags: string[] = tags.length > 0 ? tags : [validTopicKeys[0]];
     console.log('[Classification] Fallback classification:', fallbackTags);
 
     return {
@@ -586,12 +564,5 @@ function extractInsights(text: string): string[] {
   return Array.from(bulletMatches).map(m => m[1].trim());
 }
 
-function getTagContext(tags: string[]): string {
-  const tagMap: Record<string, string> = {
-    rl: 'Reinforcement Learning - Focus on algorithms, training methods, and applications',
-    llm: 'Large Language Models - Focus on architecture, training, and capabilities',
-    inference: 'LLM Inference - Focus on optimization, quantization, and systems',
-  };
+// Note: getTagContext is now imported from prompts.ts
 
-  return tags.map(tag => tagMap[tag] || tag).join(' + ');
-}

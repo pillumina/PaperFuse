@@ -1,12 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Calendar, ArrowUpDown, RotateCcw } from 'lucide-react';
 import { PaperTag } from '@/lib/db/types';
-
-const TAG_LABELS: Record<PaperTag, string> = {
-  rl: 'Reinforcement Learning',
-  llm: 'Large Language Models',
-  inference: 'Inference & Systems',
-};
+import { getTopicLabel } from '@/lib/topics';
 
 type DateRange = 'all' | 'today' | '7days' | '30days' | 'custom';
 type SortBy = 'date' | 'score';
@@ -143,7 +138,7 @@ export function FiltersBar({
               onClick={() => onTagSelect(tag)}
               className="rounded-full h-8"
             >
-              {TAG_LABELS[tag]}
+              {getTopicLabel(tag)}
             </Button>
           ))}
         </div>

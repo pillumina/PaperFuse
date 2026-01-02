@@ -8,18 +8,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { PaperTag, PaperListItem, AnalysisDepth } from '@/lib/db/types';
 import { ExternalLink, FileText, Wrench, Info, Code2 } from 'lucide-react';
 import { motion } from 'framer-motion';
-
-const TAG_COLORS: Record<PaperTag, string> = {
-  rl: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-  llm: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-  inference: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-};
-
-const TAG_LABELS: Record<PaperTag, string> = {
-  rl: 'RL',
-  llm: 'LLM',
-  inference: 'Inference',
-};
+import { getTopicLabel, getTopicColor } from '@/lib/topics';
 
 interface PaperCardProps {
   paper: PaperListItem;
@@ -129,8 +118,8 @@ function PaperCardComponent({ paper, onNavigate, index = 0 }: PaperCardProps) {
             }
             // When analyzed, use colored badges for PaperTags
             return (
-              <Badge key={tag} variant="secondary" className={TAG_COLORS[tag as PaperTag]}>
-                {TAG_LABELS[tag as PaperTag]}
+              <Badge key={tag} variant="secondary" className={getTopicColor(tag)}>
+                {getTopicLabel(tag)}
               </Badge>
             );
           })}

@@ -15,18 +15,7 @@ import remarkGfm from 'remark-gfm';
 import dynamic from 'next/dynamic';
 import { LatexRenderer } from '@/components/latex-renderer';
 import { LatexText } from '@/components/latex-text';
-
-const TAG_COLORS: Record<PaperTag, string> = {
-  rl: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-  llm: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-  inference: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-};
-
-const TAG_LABELS: Record<PaperTag, string> = {
-  rl: 'Reinforcement Learning',
-  llm: 'Large Language Model',
-  inference: 'Inference & Systems',
-};
+import { getTopicLabel, getTopicColor } from '@/lib/topics';
 
 // Dynamic import for Mermaid to avoid SSR issues
 const MermaidDiagram = dynamic(
@@ -195,8 +184,8 @@ export default function PaperDetailPage() {
               }
               // When analyzed, use colored badges for PaperTags
               return (
-                <Badge key={tag} variant="secondary" className={TAG_COLORS[tag as PaperTag]}>
-                  {TAG_LABELS[tag as PaperTag]}
+                <Badge key={tag} variant="secondary" className={getTopicColor(tag)}>
+                  {getTopicLabel(tag)}
                 </Badge>
               );
             })}

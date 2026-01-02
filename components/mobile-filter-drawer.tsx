@@ -13,12 +13,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
-
-const TAG_LABELS: Record<PaperTag, string> = {
-  rl: 'Reinforcement Learning',
-  llm: 'Large Language Models',
-  inference: 'Inference & Systems',
-};
+import { getTopicLabel } from '@/lib/topics';
 
 type DateRange = 'all' | 'today' | '7days' | '30days' | 'custom';
 type SortBy = 'date' | 'score';
@@ -126,7 +121,7 @@ export function MobileFilterDrawer({
                   onClick={() => setSelectedTag(tag)}
                   className="rounded-full"
                 >
-                  {TAG_LABELS[tag]}
+                  {getTopicLabel(tag)}
                 </Button>
               ))}
             </div>

@@ -14,12 +14,7 @@ import { Loader2, Calendar, ArrowUpDown, Search, X, ChevronLeft, ChevronRight, R
 import { useDebounce } from '@/hooks/use-debounce';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePrefetch } from '@/hooks/use-prefetch';
-
-const TAG_LABELS: Record<PaperTag, string> = {
-  rl: 'Reinforcement Learning',
-  llm: 'Large Language Models',
-  inference: 'Inference & Systems',
-};
+import { getTopics, getTopicLabel } from '@/lib/topics';
 
 type DateRange = 'all' | 'today' | '7days' | '30days' | 'custom';
 type SortBy = 'date' | 'score';
@@ -479,7 +474,7 @@ function HomeContent() {
                   onClick={() => handleTagSelect(tag)}
                   className="rounded-full h-8"
                 >
-                  {TAG_LABELS[tag]} {tagCounts[tag] !== undefined && `(${tagCounts[tag]})`}
+                  {getTopicLabel(tag)} {tagCounts[tag] !== undefined && `(${tagCounts[tag]})`}
                 </Button>
               ))}
             </div>
@@ -652,7 +647,7 @@ function HomeContent() {
         {!loading && totalCount > 0 && (
           <div className="mt-4 text-center text-sm text-muted-foreground">
             Showing {((currentPage - 1) * PAPERS_PER_PAGE) + 1}-{Math.min(currentPage * PAPERS_PER_PAGE, totalCount)} of {totalCount} paper{totalCount !== 1 ? 's' : ''}
-            {selectedTag !== 'all' && ` in ${TAG_LABELS[selectedTag as PaperTag]}`}
+            {selectedTag !== 'all' && ` in ${getTopicLabel(selectedTag as PaperTag)}`}
             {dateRange !== 'all' && ` from ${dateRange === '7days' ? 'the last 7 days' : 'the last 30 days'}`}
             {totalPages > 1 && ` · Page ${currentPage} of ${totalPages}`}
           </div>
