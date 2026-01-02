@@ -212,16 +212,41 @@ function HomeContent() {
                   <input
                     type="date"
                     value={customDateFrom}
-                    onChange={(e) => setCustomDateFrom(e.target.value)}
+                    onChange={(e) => {
+                      const newDateFrom = e.target.value;
+                      // Calculate max allowed date (30 days from dateFrom)
+                      const maxDateTo = new Date(newDateFrom);
+                      maxDateTo.setDate(maxDateTo.getDate() + 30);
+                      const maxDateToStr = maxDateTo.toISOString().split('T')[0];
+
+                      setCustomDateFrom(newDateFrom);
+                      // Adjust dateTo if it exceeds the 30-day limit
+                      if (customDateTo && customDateTo > maxDateToStr) {
+                        setCustomDateTo(maxDateToStr);
+                      }
+                    }}
                     max={customDateTo || new Date().toISOString().split('T')[0]}
+                    min={new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
                     className="px-2 py-1 text-sm border rounded-md bg-background"
                   />
                   <span className="text-muted-foreground">to</span>
                   <input
                     type="date"
                     value={customDateTo}
-                    onChange={(e) => setCustomDateTo(e.target.value)}
-                    min={customDateFrom}
+                    onChange={(e) => {
+                      const newDateTo = e.target.value;
+                      // Calculate min allowed date (30 days before dateTo)
+                      const minDateFrom = new Date(newDateTo);
+                      minDateFrom.setDate(minDateFrom.getDate() - 30);
+                      const minDateFromStr = minDateFrom.toISOString().split('T')[0];
+
+                      setCustomDateTo(newDateTo);
+                      // Adjust dateFrom if it's more than 30 days before dateTo
+                      if (customDateFrom && customDateFrom < minDateFromStr) {
+                        setCustomDateFrom(minDateFromStr);
+                      }
+                    }}
+                    min={customDateFrom || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
                     max={new Date().toISOString().split('T')[0]}
                     className="px-2 py-1 text-sm border rounded-md bg-background"
                   />
