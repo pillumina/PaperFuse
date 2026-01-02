@@ -1,14 +1,15 @@
 'use client';
 
-import { useEffect, useState, Suspense, useRef } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useEffect, useState, Suspense, useRef, useCallback } from 'react';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { PaperCard } from '@/components/paper-card';
 import { PaperCardSkeleton } from '@/components/paper-card-skeleton';
 import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { PaperTag, PaperListItem } from '@/lib/db/types';
-import { Loader2, Calendar, ArrowUpDown, Search, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2, Calendar, ArrowUpDown, Search, X, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 import { useDebounce } from '@/hooks/use-debounce';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -25,20 +26,36 @@ const PAPERS_PER_PAGE = 9;
 
 function HomeContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
 
-  // Initialize page from URL parameter on first render
+  // Initialize all filter states from URL parameters on first render
   const initialPage = parseInt(searchParams.get('page') || '1', 10);
   const [papers, setPapers] = useState<PaperListItem[]>([]);
-  const [selectedTag, setSelectedTag] = useState<PaperTag | 'all'>('all');
+  const [selectedTag, setSelectedTag] = useState<PaperTag | 'all'>(
+    () => (searchParams.get('tag') as PaperTag | 'all') || 'all'
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [dateRange, setDateRange] = useState<DateRange>('7days');
-  const [customDateFrom, setCustomDateFrom] = useState<string>('');
-  const [customDateTo, setCustomDateTo] = useState<string>('');
-  const [sortBy, setSortBy] = useState<SortBy>('date');
-  const [analysisFilter, setAnalysisFilter] = useState<AnalysisFilter>('all');
+
+  // Handle custom date range initialization
+  const urlDateRange = searchParams.get('dateRange') as DateRange;
+  const urlDateFrom = searchParams.get('dateFrom');
+  const urlDateTo = searchParams.get('dateTo');
+  const [dateRange, setDateRange] = useState<DateRange>(() => {
+    if (urlDateFrom || urlDateTo) return 'custom';
+    return urlDateRange || '7days';
+  });
+  const [customDateFrom, setCustomDateFrom] = useState<string>(() => urlDateFrom || '');
+  const [customDateTo, setCustomDateTo] = useState<string>(() => urlDateTo || '');
+  const [sortBy, setSortBy] = useState<SortBy>(
+    () => (searchParams.get('sortBy') as SortBy) || 'date'
+  );
+  const [analysisFilter, setAnalysisFilter] = useState<AnalysisFilter>(
+    () => (searchParams.get('analysis') as AnalysisFilter) || 'all'
+  );
   const [tagCounts, setTagCounts] = useState<Record<string, number>>({});
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState<string>(() => searchParams.get('search') || '');
   const [currentPage, setCurrentPage] = useState(initialPage);
   const [totalCount, setTotalCount] = useState(0);
   const isInitializedRef = useRef(true);
@@ -50,6 +67,26 @@ function HomeContent() {
   useEffect(() => {
     loadPapers();
   }, [selectedTag, dateRange, customDateFrom, customDateTo, sortBy, analysisFilter, debouncedSearchQuery, currentPage]);
+
+  // Sync all filters to URL parameters
+  useEffect(() => {
+    const params = new URLSearchParams();
+
+    // Only add params that differ from defaults
+    if (selectedTag !== 'all') params.set('tag', selectedTag);
+    if (dateRange !== '7days') params.set('dateRange', dateRange);
+    if (customDateFrom) params.set('dateFrom', customDateFrom);
+    if (customDateTo) params.set('dateTo', customDateTo);
+    if (sortBy !== 'date') params.set('sortBy', sortBy);
+    if (analysisFilter !== 'all') params.set('analysis', analysisFilter);
+    if (debouncedSearchQuery) params.set('search', debouncedSearchQuery);
+    if (currentPage !== 1) params.set('page', String(currentPage));
+
+    const queryString = params.toString();
+    const newUrl = queryString ? `${pathname}?${queryString}` : pathname;
+
+    router.replace(newUrl);
+  }, [selectedTag, dateRange, customDateFrom, customDateTo, sortBy, analysisFilter, debouncedSearchQuery, currentPage, pathname, router]);
 
   // Restore scroll position when returning from detail page
   useEffect(() => {
@@ -204,7 +241,7 @@ function HomeContent() {
       {/* Header */}
       <header className="border-b bg-card">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-start justify-between">
+          <div className="flex items-start justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold tracking-tight">
                 PaperFuse
@@ -213,11 +250,16 @@ function HomeContent() {
                 Daily AI research papers with engineering insights
               </p>
             </div>
-            <div className="hidden sm:block text-xs text-muted-foreground">
-              <div className="flex flex-col gap-1 text-right">
-                <span><kbd className="px-1.5 py-0.5 rounded bg-muted border">/</kbd> Focus search</span>
-                <span><kbd className="px-1.5 py-0.5 rounded bg-muted border">←</kbd> <kbd className="px-1.5 py-0.5 rounded bg-muted border">→</kbd> Navigate pages</span>
-                <span><kbd className="px-1.5 py-0.5 rounded bg-muted border">Esc</kbd> Clear search</span>
+            <div className="flex items-start gap-4">
+              <div className="hidden sm:block text-xs text-muted-foreground">
+                <div className="flex flex-col gap-1 text-right">
+                  <span><kbd className="px-1.5 py-0.5 rounded bg-muted border">/</kbd> Focus search</span>
+                  <span><kbd className="px-1.5 py-0.5 rounded bg-muted border">←</kbd> <kbd className="px-1.5 py-0.5 rounded bg-muted border">→</kbd> Navigate pages</span>
+                  <span><kbd className="px-1.5 py-0.5 rounded bg-muted border">Esc</kbd> Clear search</span>
+                </div>
+              </div>
+              <div className="flex items-center border-l pl-4">
+                <ThemeToggle />
               </div>
             </div>
           </div>
@@ -383,17 +425,41 @@ function HomeContent() {
           </div>
 
           {/* Sort By */}
-          <div className="flex items-center gap-2">
-            <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">Sort:</span>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortBy)}
-              className="px-3 py-1.5 text-sm border rounded-md bg-background"
-            >
-              <option value="date">Latest First</option>
-              <option value="score">Highest Score</option>
-            </select>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Sort:</span>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortBy)}
+                className="px-3 py-1.5 text-sm border rounded-md bg-background"
+              >
+                <option value="date">Latest First</option>
+                <option value="score">Highest Score</option>
+              </select>
+            </div>
+
+            {/* Clear all filters button */}
+            {(selectedTag !== 'all' || dateRange !== '7days' || sortBy !== 'date' || analysisFilter !== 'all' || searchQuery) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSelectedTag('all');
+                  setDateRange('7days');
+                  setCustomDateFrom('');
+                  setCustomDateTo('');
+                  setSortBy('date');
+                  setAnalysisFilter('all');
+                  setSearchQuery('');
+                  setCurrentPage(1);
+                }}
+                className="h-8 gap-1"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Clear all filters
+              </Button>
+            )}
           </div>
         </div>
 

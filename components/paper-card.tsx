@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { memo } from 'react';
 import { Card, CardHeader, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -30,7 +31,7 @@ function truncateReason(reason: string, maxLength = 100): string {
   return reason.substring(0, maxLength) + '...';
 }
 
-export function PaperCard({ paper, onNavigate, index = 0 }: PaperCardProps) {
+function PaperCardComponent({ paper, onNavigate, index = 0 }: PaperCardProps) {
   const isNotAnalyzed = paper.analysis_type === 'none';
 
   return (
@@ -190,6 +191,9 @@ export function PaperCard({ paper, onNavigate, index = 0 }: PaperCardProps) {
     </TooltipProvider>
   );
 }
+
+// Memoize PaperCard to prevent unnecessary re-renders
+export const PaperCard = memo(PaperCardComponent);
 
 function getScoreColor(score: number): string {
   if (score >= 8) return 'text-green-600';
