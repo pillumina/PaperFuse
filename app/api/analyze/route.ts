@@ -4,6 +4,7 @@ import { callGLM } from '@/lib/llm/glm-client';
 import Anthropic from '@anthropic-ai/sdk';
 import { getApiModelName } from '@/lib/llm/types';
 import { PaperTag } from '@/lib/db/types';
+import { getTopicKeys } from '@/lib/topics';
 
 /**
  * POST /api/analyze
@@ -416,7 +417,7 @@ function buildResult(parsed: any): any {
   // Validate tags
   let tags: PaperTag[] = [];
   if (Array.isArray(parsed.tags)) {
-    tags = parsed.tags.filter((t: string) => ['rl', 'llm', 'inference'].includes(t));
+    tags = parsed.tags.filter((t: string) => getTopicKeys().includes(t));
   }
   if (tags.length === 0) tags = ['llm'];
 
@@ -470,7 +471,7 @@ function extractPartialData(jsonText: string, fullText: string): any {
   if (tagsMatch) {
     const tagStr = tagsMatch[1];
     const possibleTags = tagStr.split(',').map((t: string) => t.trim().replace(/"/g, ''));
-    tags = possibleTags.filter((t: string) => ['rl', 'llm', 'inference'].includes(t)) as PaperTag[];
+    tags = possibleTags.filter((t: string) => getTopicKeys().includes(t)) as PaperTag[];
   }
   if (tags.length === 0) tags = ['llm'];
 

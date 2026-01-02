@@ -14,7 +14,7 @@ import { Loader2, Calendar, ArrowUpDown, Search, X, ChevronLeft, ChevronRight, R
 import { useDebounce } from '@/hooks/use-debounce';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePrefetch } from '@/hooks/use-prefetch';
-import { getTopics, getTopicLabel } from '@/lib/topics';
+import { getTopics, getTopicLabel, getTopicKeys } from '@/lib/topics';
 
 type DateRange = 'all' | 'today' | '7days' | '30days' | 'custom';
 type SortBy = 'date' | 'score';
@@ -467,7 +467,7 @@ function HomeContent() {
               >
                 All {tagCounts.all !== undefined && `(${tagCounts.all})`}
               </Button>
-              {(['rl', 'llm', 'inference'] as PaperTag[]).map((tag) => (
+              {(getTopicKeys() as PaperTag[]).map((tag) => (
                 <Button
                   key={tag}
                   variant={selectedTag === tag ? 'default' : 'outline'}

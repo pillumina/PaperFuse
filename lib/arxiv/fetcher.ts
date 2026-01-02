@@ -1,5 +1,6 @@
 import { ArxivPaper, ArxivFetchOptions, PaperTag } from '../db/types';
 import { DOMAIN_CONFIGS } from '../db/types';
+import { getTopicKeys } from '../topics';
 
 /**
  * ArXiv API Fetcher
@@ -248,7 +249,7 @@ export async function fetchArxivPaperById(arxivId: string): Promise<ArxivPaper |
 export async function fetchAllPapers(daysBack: number = 1): Promise<Map<PaperTag, ArxivPaper[]>> {
   const results = new Map<PaperTag, ArxivPaper[]>();
 
-  for (const tag of ['rl', 'llm', 'inference'] as PaperTag[]) {
+  for (const tag of getTopicKeys() as PaperTag[]) {
     try {
       const papers = await fetchPapersByTag(tag, { daysBack });
       results.set(tag, papers);

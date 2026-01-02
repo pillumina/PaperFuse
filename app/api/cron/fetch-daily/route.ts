@@ -5,6 +5,7 @@ import { filterPapers } from '@/lib/filters/rule-filter';
 import { quickScorePaper } from '@/lib/filters/quick-scorer';
 import { deepAnalyzePaper } from '@/lib/filters/deep-analyzer';
 import { DOMAIN_CONFIGS, PaperTag } from '@/lib/db/types';
+import { getTopicKeys } from '@/lib/topics';
 
 /**
  * GET /api/cron/fetch-daily
@@ -47,7 +48,7 @@ export async function GET(request: NextRequest) {
     };
 
     // Process each tag
-    for (const tag of ['rl', 'llm', 'inference'] as PaperTag[]) {
+    for (const tag of getTopicKeys() as PaperTag[]) {
       console.log(`\nProcessing tag: ${tag}`);
       const tagResult = {
         fetched: 0,

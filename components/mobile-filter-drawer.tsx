@@ -13,7 +13,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
-import { getTopicLabel } from '@/lib/topics';
+import { getTopicLabel, getTopicKeys } from '@/lib/topics';
 
 type DateRange = 'all' | 'today' | '7days' | '30days' | 'custom';
 type SortBy = 'date' | 'score';
@@ -114,7 +114,7 @@ export function MobileFilterDrawer({
               >
                 All
               </Button>
-              {(['rl', 'llm', 'inference'] as PaperTag[]).map((tag) => (
+              {(getTopicKeys() as PaperTag[]).map((tag) => (
                 <Button
                   key={tag}
                   variant={selectedTag === tag ? 'default' : 'outline'}

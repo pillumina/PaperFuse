@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Calendar, ArrowUpDown, RotateCcw } from 'lucide-react';
 import { PaperTag } from '@/lib/db/types';
-import { getTopicLabel } from '@/lib/topics';
+import { getTopicLabel, getTopicKeys } from '@/lib/topics';
 
 type DateRange = 'all' | 'today' | '7days' | '30days' | 'custom';
 type SortBy = 'date' | 'score';
@@ -131,7 +131,7 @@ export function FiltersBar({
           >
             All
           </Button>
-          {(['rl', 'llm', 'inference'] as PaperTag[]).map((tag) => (
+          {(getTopicKeys() as PaperTag[]).map((tag) => (
             <Button
               key={tag}
               variant={selectedTag === tag ? 'default' : 'outline'}
