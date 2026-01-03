@@ -6,6 +6,8 @@ Complete API reference for PaperFuse.
 
 ## Table of Contents
 
+- [Topics API](#topics-api)
+  - [GET /api/topics](#get-apitopics)
 - [Analysis APIs](#analysis-apis)
   - [POST /api/analyze](#post-apianalyze)
 - [Fetch & Process APIs](#fetch--process-apis)
@@ -16,6 +18,51 @@ Complete API reference for PaperFuse.
   - [GET /api/papers/[id]](#get-apipapersid)
 - [Cron APIs](#cron-apis)
   - [GET /api/cron/fetch-daily](#get-apicronfetch-daily)
+
+---
+
+## Topics API
+
+### GET /api/topics
+
+**Get configured topics** - Returns the list of configured research topics.
+
+This endpoint reads from the `TOPICS_CONFIG` environment variable and provides
+the topics for client-side use, avoiding hydration mismatches.
+
+#### Response
+
+```json
+[
+  {
+    "key": "rl",
+    "label": "Reinforcement Learning",
+    "description": "RL algorithms, training methods, exploration, exploitation, policy optimization, value functions, actor-critic, PPO, DQN, SARSA, reward shaping, hierarchical RL, etc.",
+    "color": "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
+  },
+  {
+    "key": "llm",
+    "label": "Large Language Models",
+    "description": "LLM architecture, training, alignment, capabilities, language models, transformers for NLP, GPT, BERT, T5, scaling laws, pre-training, fine-tuning, instruction tuning, etc.",
+    "color": "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+  },
+  {
+    "key": "inference",
+    "label": "Inference & Systems",
+    "description": "LLM inference optimization, quantization, distillation, serving systems, vLLM, TensorRT-LLM, deployment, latency optimization, throughput improvements, batch processing, etc.",
+    "color": "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+  }
+]
+```
+
+#### Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `key` | string | Unique identifier stored in database |
+| `label` | string | Display name shown in UI |
+| `description` | string | Detailed description for LLM classification prompt |
+| `color` | string | Tailwind CSS classes for badge styling |
 
 ---
 
@@ -214,13 +261,13 @@ POST /api/sync-to-supabase?clear=true
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `tag` | string | null | Filter by tag: "rl" \| "llm" \| "inference" |
+| `tag` | string | null | Filter by tag (from your custom topics) |
 | `search` | string | null | Search in title, authors, AI summary |
 | `dateFrom` | string | null | Filter by date (YYYY-MM-DD) |
 | `dateTo` | string | null | Filter by date (YYYY-MM-DD) |
-| `sortBy` | string | "date" | Sort by: "date" \| "score" |
+| `sortBy` | string | "date" | Sort by: "date" or "score" |
 | `minScore` | number | null | Minimum filter score (1-10) |
-| `deepAnalyzedOnly` | boolean | false | Only show deep analyzed papers |
+| `analyzedOnly` | boolean | false | Only show analyzed papers |
 | `limit` | number | 20 | Results per page |
 | `offset` | number | 0 | Pagination offset |
 
@@ -236,8 +283,8 @@ GET /api/papers?search=reinforcement%20learning
 # Get high-score LLM papers, sorted by score
 GET /api/papers?tag=llm&minScore=8&sortBy=score
 
-# Get deep analyzed inference papers
-GET /api/papers?tag=inference&deepAnalyzedOnly=true
+# Get analyzed inference papers
+GET /api/papers?tag=inference&analyzedOnly=true
 
 # Pagination
 GET /api/papers?limit=10&offset=20
@@ -353,31 +400,87 @@ Authorization: Bearer YOUR_CRON_SECRET
 ## Environment Variables
 
 ```bash
-# LLM Provider (required)
+# ================================
+# LLM Provider (Required)
+# ================================
 LLM_PROVIDER=glm  # Options: glm, claude
 
+# --------------------------
 # GLM (ZhipuAI) - if LLM_PROVIDER=glm
+# --------------------------
 ZHIPUAI_API_KEY=your_key
-GLM_DEEP_MODEL=glm-4.7
+GLM_QUICK_MODEL=glm-4.5-flash  # Fast model for classification/scoring (FREE)
+GLM_DEEP_MODEL=glm-4.7            # Deep model for analysis (flagship quality)
 
+# Alternative GLM models:
+# GLM_QUICK_MODEL=glm-4.5-x      # Fast
+# GLM_QUICK_MODEL=glm-4.5-air    # Value-priced
+# GLM_QUICK_MODEL=glm-4.5-airx   # Faster
+# GLM_DEEP_MODEL=glm-4.6          # Ultra (faster deep analysis)
+# GLM_DEEP_MODEL=glm-4.5          # Pro (economy deep analysis)
+
+# ---------------------------------
 # Claude (Anthropic) - if LLM_PROVIDER=claude
+# ---------------------------------
 ANTHROPIC_API_KEY=your_key
+CLAUDE_QUICK_MODEL=claude-haiku
+CLAUDE_DEEP_MODEL=claude-sonnet
 
+# ================================
+# Topics Configuration (Optional)
+# ================================
+# Custom research topics for paper classification and UI display.
+# JSON array of topic objects with: key, label, description, color
+TOPICS_CONFIG='[
+  {"key":"rl","label":"Reinforcement Learning","description":"RL algorithms...","color":"bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"},
+  {"key":"llm","label":"Large Language Models","description":"LLM architecture...","color":"bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"},
+  {"key":"inference","label":"Inference & Systems","description":"LLM inference optimization...","color":"bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"}
+]'
+
+# ================================
 # ArXiv Configuration
-ARXIV_CATEGORIES=cs.AI,cs.LG,cs.CL
+# ================================
+# Comma-separated list of ArXiv categories to fetch papers from
+ARXIV_CATEGORIES=cs.AI,cs.LG,stat.ML
 
+# ================================
 # Analysis Configuration
-MIN_SCORE_THRESHOLD=8        # Score threshold for detailed output
-MIN_SCORE_TO_SAVE=5          # Minimum score to save paper
-DEFAULT_ANALYSIS_DEPTH=standard  # basic, standard, or full
+# ================================
+# Enable/disable LLM analysis
+ENABLE_LLM_ANALYSIS=false
 
-# Supabase (optional - if not set, uses local JSON storage)
+# Analysis depth: basic (abstract only), standard (intro+conclusion, two-phase), full (all sections)
+ANALYSIS_DEPTH=standard
+
+# Minimum score threshold for detailed output
+# - Standard mode: triggers Phase 2 (full detailed analysis with all sections)
+# - Full mode: determines whether to output algorithms/formulas/diagrams
+# Default: 7 (papers with score >= 7 get detailed treatment)
+MIN_SCORE_THRESHOLD=8
+
+# Optional: Minimum score to save paper (below this score, papers are skipped during fetch)
+# Set to null or remove this line to save all papers
+MIN_SCORE_TO_SAVE=6
+
+# ================================
+# Paper Cache (LaTeX Source)
+# ================================
+# Directory to store downloaded LaTeX source for full text analysis
+PAPER_CACHE_PATH=./local/cache/papers
+
+# ================================
+# Supabase (Optional - Production)
+# ================================
+# If not set, uses local JSON file storage
 NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJxxxx...
 SUPABASE_SERVICE_ROLE_KEY=eyJxxxx...
 
-# Cron Protection
-CRON_SECRET=your_random_secret_string
+# ================================
+# Cron Job Security
+# ================================
+# Required for production deployment cron jobs
+CRON_SECRET=generate_a_random_secret_string_here
 ```
 
 ---
@@ -415,3 +518,36 @@ PaperFuse supports two storage modes:
 - Persistent cloud storage
 - Requires Supabase setup
 - Enabled when Supabase env vars are set
+
+---
+
+## Custom Topics System
+
+PaperFuse features a fully customizable topics system:
+
+### How It Works
+
+1. **Configuration** - Define topics in `TOPICS_CONFIG` environment variable
+2. **Dynamic UI** - Topics automatically appear in filters and badges
+3. **AI Classification** - LLM uses topic descriptions for classification
+4. **No Code Changes** - Add/remove topics without touching code
+
+### Example: Adding a New Topic
+
+```env
+TOPICS_CONFIG='[
+  {"key":"multimodal","label":"Multimodal Models","description":"Vision-language models, audio-language models, CLIP, DALL-E, Stable Diffusion","color":"bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"}
+]'
+```
+
+After restart, "Multimodal Models" appears in:
+- Topic filter buttons
+- Paper badges
+- Classification options
+
+### Best Practices
+
+- **Keys**: Use short, lowercase identifiers (e.g., `rl`, `llm`)
+- **Labels**: Use descriptive names for UI display
+- **Descriptions**: Be detailed - this guides the LLM classifier
+- **Colors**: Use Tailwind CSS classes for light/dark mode support
