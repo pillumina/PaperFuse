@@ -14,17 +14,39 @@ import { Loader2, Calendar, ArrowUpDown, Search, X, ChevronLeft, ChevronRight, R
 import { useDebounce } from '@/hooks/use-debounce';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePrefetch } from '@/hooks/use-prefetch';
-import { getTopics, getTopicLabel, getTopicKeys } from '@/lib/topics';
+import { TopicConfig } from '@/lib/topics';
 
 type DateRange = 'all' | 'today' | '7days' | '30days' | 'custom';
 type SortBy = 'date' | 'score';
 type AnalysisFilter = 'all' | 'analyzed' | 'not-analyzed';
 const PAPERS_PER_PAGE = 9;
 
-function HomeContent() {
+interface HomeContentProps {
+  serverTopics: TopicConfig[];
+}
+
+function HomeContent({ serverTopics }: HomeContentProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
+
+  // Use server topics, but also fetch on client to ensure consistency
+  const [topics, setTopics] = useState<TopicConfig[]>(serverTopics);
+
+  useEffect(() => {
+    // After hydration, fetch topics from API to ensure consistency
+    fetch('/api/topics')
+      .then(res => res.json())
+      .then(data => setTopics(data))
+      .catch(err => console.error('Failed to fetch topics:', err));
+  }, []);
+
+  // Helper functions using topics state
+  const getTopicKeysList = useCallback(() => topics.map(t => t.key), [topics]);
+  const getTopicLabelByKey = useCallback((key: string): string => {
+    const topic = topics.find(t => t.key === key);
+    return topic?.label || key;
+  }, [topics]);
 
   // Initialize all filter states from URL parameters on first render
   const initialPage = parseInt(searchParams.get('page') || '1', 10);
@@ -346,6 +368,7 @@ function HomeContent() {
             setCustomDateTo={setCustomDateTo}
             onClearAll={clearAllFilters}
             hasActiveFilters={!!(selectedTag !== 'all' || dateRange !== '7days' || sortBy !== 'date' || analysisFilter !== 'all' || searchQuery)}
+            topics={topics}
           />
         </div>
 
@@ -467,14 +490,14 @@ function HomeContent() {
               >
                 All {tagCounts.all !== undefined && `(${tagCounts.all})`}
               </Button>
-              {(getTopicKeys() as PaperTag[]).map((tag) => (
+              {(getTopicKeysList() as PaperTag[]).map((tag) => (
                 <Button
                   key={tag}
                   variant={selectedTag === tag ? 'default' : 'outline'}
                   onClick={() => handleTagSelect(tag)}
                   className="rounded-full h-8"
                 >
-                  {getTopicLabel(tag)} {tagCounts[tag] !== undefined && `(${tagCounts[tag]})`}
+                  {getTopicLabelByKey(tag)} {tagCounts[tag] !== undefined && `(${tagCounts[tag]})`}
                 </Button>
               ))}
             </div>
@@ -647,7 +670,7 @@ function HomeContent() {
         {!loading && totalCount > 0 && (
           <div className="mt-4 text-center text-sm text-muted-foreground">
             Showing {((currentPage - 1) * PAPERS_PER_PAGE) + 1}-{Math.min(currentPage * PAPERS_PER_PAGE, totalCount)} of {totalCount} paper{totalCount !== 1 ? 's' : ''}
-            {selectedTag !== 'all' && ` in ${getTopicLabel(selectedTag as PaperTag)}`}
+            {selectedTag !== 'all' && ` in ${getTopicLabelByKey(selectedTag as PaperTag)}`}
             {dateRange !== 'all' && ` from ${dateRange === '7days' ? 'the last 7 days' : 'the last 30 days'}`}
             {totalPages > 1 && ` · Page ${currentPage} of ${totalPages}`}
           </div>
@@ -657,14 +680,19 @@ function HomeContent() {
   );
 }
 
+// Server component wrapper that fetches topics and passes to client
+import { getTopics } from '@/lib/topics';
+
 function HomeWrapper() {
+  const topics = getTopics();
+
   return (
     <Suspense fallback={
       <main className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
       </main>
     }>
-      <HomeContent />
+      <HomeContent serverTopics={topics} />
     </Suspense>
   );
 }

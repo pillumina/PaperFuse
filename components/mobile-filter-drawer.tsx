@@ -13,7 +13,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
-import { getTopicLabel, getTopicKeys } from '@/lib/topics';
+import { TopicConfig } from '@/lib/topics';
 
 type DateRange = 'all' | 'today' | '7days' | '30days' | 'custom';
 type SortBy = 'date' | 'score';
@@ -36,6 +36,7 @@ interface MobileFilterDrawerProps {
   setCustomDateTo: (date: string) => void;
   onClearAll: () => void;
   hasActiveFilters: boolean;
+  topics: TopicConfig[];
 }
 
 export function MobileFilterDrawer({
@@ -55,7 +56,15 @@ export function MobileFilterDrawer({
   setCustomDateTo,
   onClearAll,
   hasActiveFilters,
+  topics,
 }: MobileFilterDrawerProps) {
+
+  // Helper functions using topics prop
+  const getTopicKeysList = () => topics.map(t => t.key);
+  const getTopicLabelByKey = (key: string): string => {
+    const topic = topics.find(t => t.key === key);
+    return topic?.label || key;
+  };
   const [open, setOpen] = useState(false);
 
   return (
@@ -114,14 +123,14 @@ export function MobileFilterDrawer({
               >
                 All
               </Button>
-              {(getTopicKeys() as PaperTag[]).map((tag) => (
+              {(getTopicKeysList() as PaperTag[]).map((tag) => (
                 <Button
                   key={tag}
                   variant={selectedTag === tag ? 'default' : 'outline'}
                   onClick={() => setSelectedTag(tag)}
                   className="rounded-full"
                 >
-                  {getTopicLabel(tag)}
+                  {getTopicLabelByKey(tag)}
                 </Button>
               ))}
             </div>
