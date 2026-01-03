@@ -30,18 +30,10 @@ function HomeContent({ serverTopics }: HomeContentProps) {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Use server topics, but also fetch on client to ensure consistency
-  const [topics, setTopics] = useState<TopicConfig[]>(serverTopics);
+  // Use server topics directly (no client-side fetching to avoid hydration mismatch)
+  const topics = serverTopics;
 
-  useEffect(() => {
-    // After hydration, fetch topics from API to ensure consistency
-    fetch('/api/topics')
-      .then(res => res.json())
-      .then(data => setTopics(data))
-      .catch(err => console.error('Failed to fetch topics:', err));
-  }, []);
-
-  // Helper functions using topics state
+  // Helper functions using topics
   const getTopicKeysList = useCallback(() => topics.map(t => t.key), [topics]);
   const getTopicLabelByKey = useCallback((key: string): string => {
     const topic = topics.find(t => t.key === key);
