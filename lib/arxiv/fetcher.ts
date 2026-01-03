@@ -27,10 +27,18 @@ export async function fetchArxivPapers(options: ArxivFetchOptions): Promise<Arxi
     daysBack = 1,
   } = options;
 
-  // Calculate date range using UTC timestamps
-  const now = Date.now();
-  const daysBackMs = daysBack * 24 * 60 * 60 * 1000;
-  const startDateTimestamp = now - daysBackMs;
+  // Calculate date range using start of day in UTC
+  // This ensures we capture all papers from the last N days, regardless of time
+  const now = new Date();
+  const startDate = new Date(now);
+  startDate.setDate(startDate.getDate() - daysBack);
+  startDate.setHours(0, 0, 0, 0); // Set to start of that day
+
+  // Set end date to end of current day
+  const endDate = new Date(now);
+  endDate.setHours(23, 59, 59, 999); // End of current day
+
+  console.log(`[ArXiv Fetcher] Fetching papers from ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
   // Build search query for each category
   // ArXiv API doesn't have date filtering, so we fetch recent and filter client-side
@@ -62,12 +70,17 @@ export async function fetchArxivPapers(options: ArxivFetchOptions): Promise<Arxi
     const xmlText = await response.text();
     const papers = parseArxivXML(xmlText);
 
-    // Filter by date range using UTC timestamps
-    // ArXiv dates are in UTC format, so we compare timestamps directly
+    // Filter by date range using UTC dates
+    // ArXiv dates are in UTC format
     const filteredPapers = papers.filter(paper => {
-      const paperTime = paper.published.getTime();
-      return paperTime >= startDateTimestamp && paperTime <= now;
+      const paperDate = new Date(paper.published);
+      return paperDate >= startDate && paperDate <= endDate;
     });
+
+    console.log(`[ArXiv Fetcher] Filtered ${filteredPapers.length} papers from ${papers.length} total`);
+    if (filteredPapers.length > 0) {
+      console.log(`[ArXiv Fetcher] Date range: ${new Date(filteredPapers[0].published).toISOString()} to ${new Date(filteredPapers[filteredPapers.length - 1].published).toISOString()}`);
+    }
 
     return filteredPapers;
   } catch (error) {
