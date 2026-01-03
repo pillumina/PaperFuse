@@ -76,19 +76,30 @@ function parseTopicsConfig(): TopicConfig[] | null {
 }
 
 /**
+ * Cache for topics to avoid hydration mismatches
+ */
+let cachedTopics: TopicConfig[] | null = null;
+
+/**
  * Get all topic configurations
  * Falls back to default topics if not configured in environment
  */
 export function getTopics(): TopicConfig[] {
+  // Return cached topics if available (prevents hydration mismatches)
+  if (cachedTopics) {
+    return cachedTopics;
+  }
+
   const fromEnv = parseTopicsConfig();
 
   if (fromEnv) {
     console.log('[Topics] Loaded', fromEnv.length, 'topics from environment variable');
+    cachedTopics = fromEnv;
     return fromEnv;
   }
 
   // Default topics
-  return [
+  const defaults = [
     {
       key: 'rl',
       label: 'Reinforcement Learning',
@@ -108,6 +119,9 @@ export function getTopics(): TopicConfig[] {
       color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
     },
   ];
+
+  cachedTopics = defaults;
+  return defaults;
 }
 
 /**
