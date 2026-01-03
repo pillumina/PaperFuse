@@ -28,7 +28,13 @@ function parseTopicsConfig(): TopicConfig[] | null {
   }
 
   try {
-    const parsed = JSON.parse(envConfig);
+    // Handle multi-line JSON from .env files by removing newlines and extra spaces
+    const normalizedConfig = envConfig
+      .replace(/\n/g, ' ')  // Replace newlines with spaces
+      .replace(/\s+/g, ' ')  // Collapse multiple spaces to single space
+      .trim();              // Remove leading/trailing whitespace
+
+    const parsed = JSON.parse(normalizedConfig);
 
     if (!Array.isArray(parsed)) {
       throw new Error('TOPICS_CONFIG must be an array');
