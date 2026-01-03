@@ -4,8 +4,8 @@ import { fetchAllPapers, mapCategoriesToTags } from '@/lib/arxiv/fetcher';
 import { filterPapers } from '@/lib/filters/rule-filter';
 import { quickScorePaper } from '@/lib/filters/quick-scorer';
 import { deepAnalyzePaper } from '@/lib/filters/deep-analyzer';
-import { DOMAIN_CONFIGS, PaperTag } from '@/lib/db/types';
-import { getTopicKeys } from '@/lib/topics';
+import { PaperTag } from '@/lib/db/types';
+import { getDomainConfig, getTopicKeys } from '@/lib/topics';
 
 /**
  * GET /api/cron/fetch-daily
@@ -59,7 +59,10 @@ export async function GET(request: NextRequest) {
       };
 
       try {
-        const config = DOMAIN_CONFIGS[tag];
+        const config = getDomainConfig(tag);
+        if (!config) {
+          throw new Error(`Unknown tag: ${tag}`);
+        }
 
         // Step 1: Fetch from ArXiv
         const papersByTag = await fetchAllPapers(1);

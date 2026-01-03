@@ -1,5 +1,5 @@
 import { ArxivPaper, ArxivFetchOptions, PaperTag } from '../db/types';
-import { DOMAIN_CONFIGS } from '../db/types';
+import { getDomainConfig } from '../topics';
 import { getTopicKeys } from '../topics';
 
 /**
@@ -198,7 +198,10 @@ export async function fetchPapersByTag(
   tag: PaperTag,
   options: { daysBack?: number; maxResults?: number } = {}
 ): Promise<ArxivPaper[]> {
-  const config = DOMAIN_CONFIGS[tag];
+  const config = getDomainConfig(tag);
+  if (!config) {
+    throw new Error(`Unknown tag: ${tag}`);
+  }
   return fetchArxivPapers({
     categories: config.arxivCategories,
     maxResults: options.maxResults || config.maxPapersPerDay * 2, // Fetch more for filtering

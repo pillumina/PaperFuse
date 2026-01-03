@@ -15,6 +15,28 @@ export interface TopicConfig {
   description: string;
   /** Tailwind CSS color classes for badges */
   color: string;
+  /** Optional: ArXiv categories for fetching (default: ['cs.AI', 'cs.LG']) */
+  arxivCategories?: string[];
+  /** Optional: Max papers per day (default: 10) */
+  maxPapersPerDay?: number;
+  /** Optional: Number of papers to deep analyze (default: 3) */
+  deepAnalysisCount?: number;
+  /** Optional: Quick score threshold for deep analysis (default: 7) */
+  quickScoreThreshold?: number;
+  /** Optional: Keywords for additional relevance filtering */
+  keywords?: string[];
+}
+
+/**
+ * Domain configuration derived from TopicConfig
+ */
+export interface DomainConfig {
+  tag: string;
+  arxivCategories: string[];
+  maxPapersPerDay: number;
+  deepAnalysisCount: number;
+  quickScoreThreshold: number;
+  keywords: string[];
 }
 
 /**
@@ -40,7 +62,7 @@ function parseTopicsConfig(): TopicConfig[] | null {
       throw new Error('TOPICS_CONFIG must be an array');
     }
 
-    // Validate structure
+    // Validate structure and merge with defaults for optional fields
     const validated = parsed.map((item, index) => {
       if (!item.key || typeof item.key !== 'string') {
         throw new Error(`Topic at index ${index} missing or invalid 'key'`);
@@ -60,6 +82,12 @@ function parseTopicsConfig(): TopicConfig[] | null {
         label: item.label,
         description: item.description,
         color: item.color,
+        // Optional fields with defaults
+        arxivCategories: item.arxivCategories || ['cs.AI', 'cs.LG'],
+        maxPapersPerDay: item.maxPapersPerDay ?? 10,
+        deepAnalysisCount: item.deepAnalysisCount ?? 3,
+        quickScoreThreshold: item.quickScoreThreshold ?? 7,
+        keywords: item.keywords || [],
       };
     });
 
@@ -98,25 +126,40 @@ export function getTopics(): TopicConfig[] {
     return fromEnv;
   }
 
-  // Default topics
-  const defaults = [
+  // Default topics with full domain configuration
+  const defaults: TopicConfig[] = [
     {
       key: 'rl',
       label: 'Reinforcement Learning',
       description: 'RL algorithms, training methods, exploration, exploitation, policy optimization, value functions, actor-critic, PPO, DQN, SARSA, reward shaping, hierarchical RL, etc.',
       color: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+      arxivCategories: ['cs.AI', 'cs.LG', 'stat.ML'],
+      maxPapersPerDay: 10,
+      deepAnalysisCount: 3,
+      quickScoreThreshold: 7,
+      keywords: ['reinforcement', 'reinforcement learning', 'policy gradient', 'q-learning', 'actor-critic', 'ppo', 'dqn', 'rlhf', 'rlaif'],
     },
     {
       key: 'llm',
       label: 'Large Language Models',
       description: 'LLM architecture, training, alignment, capabilities, language models, transformers for NLP, GPT, BERT, T5, scaling laws, pre-training, fine-tuning, instruction tuning, etc.',
       color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+      arxivCategories: ['cs.AI', 'cs.CL', 'cs.LG'],
+      maxPapersPerDay: 10,
+      deepAnalysisCount: 3,
+      quickScoreThreshold: 7,
+      keywords: ['language model', 'llm', 'gpt', 'transformer', 'attention', 'pretraining', 'finetuning', 'alignment', 'llm inference', 'large language'],
     },
     {
       key: 'inference',
       label: 'Inference & Systems',
       description: 'LLM inference optimization, quantization, distillation, serving systems, vLLM, TensorRT-LLM, deployment, latency optimization, throughput improvements, batch processing, etc.',
       color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+      arxivCategories: ['cs.AI', 'cs.LG', 'cs.DC'],
+      maxPapersPerDay: 8,
+      deepAnalysisCount: 2,
+      quickScoreThreshold: 8,
+      keywords: ['inference', 'quantization', 'distillation', 'speculative', 'kv cache', 'acceleration', 'optimization', 'serving', 'latency', 'throughput'],
     },
   ];
 
@@ -154,4 +197,41 @@ export function getTopicKeys(): string[] {
  */
 export function isValidTopic(key: string): boolean {
   return getTopicKeys().includes(key);
+}
+
+/**
+ * Get domain configuration for a specific topic
+ * Returns null if topic not found
+ */
+export function getDomainConfig(tag: string): DomainConfig | null {
+  const topics = getTopics();
+  const topic = topics.find(t => t.key === tag);
+
+  if (!topic) {
+    return null;
+  }
+
+  return {
+    tag: topic.key,
+    arxivCategories: topic.arxivCategories || ['cs.AI', 'cs.LG'],
+    maxPapersPerDay: topic.maxPapersPerDay ?? 10,
+    deepAnalysisCount: topic.deepAnalysisCount ?? 3,
+    quickScoreThreshold: topic.quickScoreThreshold ?? 7,
+    keywords: topic.keywords || [],
+  };
+}
+
+/**
+ * Get all domain configurations
+ */
+export function getAllDomainConfigs(): DomainConfig[] {
+  const topics = getTopics();
+  return topics.map(topic => ({
+    tag: topic.key,
+    arxivCategories: topic.arxivCategories || ['cs.AI', 'cs.LG'],
+    maxPapersPerDay: topic.maxPapersPerDay ?? 10,
+    deepAnalysisCount: topic.deepAnalysisCount ?? 3,
+    quickScoreThreshold: topic.quickScoreThreshold ?? 7,
+    keywords: topic.keywords || [],
+  }));
 }

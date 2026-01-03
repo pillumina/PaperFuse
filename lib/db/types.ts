@@ -2,8 +2,15 @@
 // Database Types (matching Supabase schema)
 // ============================================
 
-export type PaperTag = 'rl' | 'llm' | 'inference';
+// PaperTag is now dynamic - any string is valid
+// Use getTopicKeys() from lib/topics.ts to get valid topics
+export type PaperTag = string;
 export type AnalysisDepth = 'none' | 'basic' | 'standard' | 'full';  // Analysis depth level
+
+// Re-export domain config types and functions from lib/topics
+// Domain configuration is now managed dynamically through TOPICS_CONFIG
+export type { DomainConfig } from '../topics';
+export { getDomainConfig, getAllDomainConfigs } from '../topics';
 
 export type JobStatus = 'pending' | 'filtering' | 'analyzing' | 'completed' | 'failed';
 export type JobType = 'quick_score' | 'deep_analysis';
@@ -163,39 +170,5 @@ export interface DeepAnalysisInput {
 // ============================================
 // Domain Config Types
 // ============================================
-
-export interface DomainConfig {
-  tag: PaperTag;
-  arxivCategories: string[];
-  maxPapersPerDay: number;
-  deepAnalysisCount: number;
-  quickScoreThreshold: number; // Min score to proceed to deep analysis
-  keywords: string[]; // For additional relevance filtering
-}
-
-export const DOMAIN_CONFIGS: Record<PaperTag, DomainConfig> = {
-  rl: {
-    tag: 'rl',
-    arxivCategories: ['cs.AI', 'cs.LG', 'stat.ML'],
-    maxPapersPerDay: 10,
-    deepAnalysisCount: 3,
-    quickScoreThreshold: 7,
-    keywords: ['reinforcement', 'reinforcement learning', 'policy gradient', 'q-learning', 'actor-critic', 'ppo', 'dqn', 'rlhf', 'rlaif'],
-  },
-  llm: {
-    tag: 'llm',
-    arxivCategories: ['cs.AI', 'cs.CL', 'cs.LG'],
-    maxPapersPerDay: 10,
-    deepAnalysisCount: 3,
-    quickScoreThreshold: 7,
-    keywords: ['language model', 'llm', 'gpt', 'transformer', 'attention', 'pretraining', 'finetuning', 'alignment', 'llm inference', 'large language'],
-  },
-  inference: {
-    tag: 'inference',
-    arxivCategories: ['cs.AI', 'cs.LG', 'cs.DC'],
-    maxPapersPerDay: 8,
-    deepAnalysisCount: 2,
-    quickScoreThreshold: 8,
-    keywords: ['inference', 'quantization', 'distillation', 'speculative', 'kv cache', 'acceleration', 'optimization', 'serving', 'latency', 'throughput'],
-  },
-};
+// Domain configuration is now managed dynamically through TOPICS_CONFIG
+// Use getDomainConfig(tag) and getAllDomainConfigs() from lib/topics.ts
